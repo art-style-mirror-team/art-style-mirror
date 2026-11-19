@@ -33,6 +33,7 @@ def _seed(*parts: bytes | str) -> int:
 
 def preprocess_input(img: np.ndarray) -> np.ndarray:
     """사용자 입력 전용 전처리. RGB uint8, 긴 변 512px. (스텁: 크기 맞추기만, 종이 자르기·화이트밸런스는 #16)"""
+    # TODO(#16): 스텁 — #16 종이 영역 자르기·화이트밸런스 (담당 C)
     img = np.asarray(img)
     if img.ndim == 2:
         img = np.stack([img] * 3, axis=-1)
@@ -61,6 +62,7 @@ def is_grayscale(img: np.ndarray) -> bool:
 def extract_features(img: np.ndarray, gray: bool = False) -> dict:
     """색 6종(palette 포함)·선 5종 특징. 수치는 0~1, direction은 각도(0~180), palette는 [[r, g, b] × 5].
     (스텁: 이미지 바이트로 만든 가짜 값)"""
+    # TODO(#17): 스텁 — #17 색 특징, #18 선 특징 실제 계산 (담당 C)
     rng = np.random.default_rng(_seed(np.asarray(img).tobytes(), str(gray)))
     feats = {f: float(rng.uniform(0.1, 0.9)) for f in NUMERIC_FEATURES}
     feats["direction"] = float(rng.uniform(0, 180))
@@ -91,6 +93,7 @@ def _profiles() -> dict:
 
 def load_profiles() -> dict:
     """{artist: {feature: (mean, std)}}. 실제 구현은 학습셋으로만 계산한다. (스텁: 가짜 프로필)"""
+    # TODO(#19): 스텁 — #19 artifacts/profiles.json 로드, 학습셋 기준 (담당 C)
     return {a: dict(p) for a, p in _profiles().items()}
 
 
@@ -98,6 +101,7 @@ def predict_cv(features: dict, gray: bool = False) -> dict:
     """OpenCV 관점 확률. {artist: prob}, 합 1.
     z(a,f) = (x_f − μ) / max(σ, ε), D_a = mean_f z², p ∝ exp(−D_a / 2T). 스케치는 선 특징만 쓴다.
     (스텁: T = 1, 피셔 점수 거르기는 #20)"""
+    # TODO(#20): 스텁 — #20 피셔 점수로 약한 특징 제외, #14 온도 T 적용 (담당 C)
     T = 1.0
     used = LINE_FEATURES if gray else NUMERIC_FEATURES
     profiles = load_profiles()

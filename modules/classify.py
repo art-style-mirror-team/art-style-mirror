@@ -48,11 +48,13 @@ def _centroids() -> dict:
 
 def detect_type(img_emb: np.ndarray) -> str:
     """입력 유형 판별. "photo" | "painting" | "sketch". (스텁: 임베딩 앞 3개 값 중 최댓값)"""
+    # TODO(#8): 스텁 — #8 CLIP zero-shot 유형 판별 (담당 B)
     return ("photo", "painting", "sketch")[int(np.argmax(np.asarray(img_emb)[:3]))]
 
 
 def predict_clip(emb: np.ndarray) -> dict:
     """CLIP 관점 확률. {"artists": {name: prob}, "styles": {name: prob}}, 각각 합 1, 온도 보정 적용."""
+    # TODO(#9–#12): 스텁 — #9–#12, #14 판정 방식 선정과 온도 보정 (담당 B)
     T = load_calibration()["T_clip"]
     emb = np.asarray(emb, dtype=np.float32)
     result = {}
@@ -65,6 +67,7 @@ def predict_clip(emb: np.ndarray) -> dict:
 
 def similar_works(emb: np.ndarray, k: int = 3) -> list[dict]:
     """비슷한 명화 k점. [{"id", "artist", "style", "path", "score"}], 유사도 0.95 이상(자기 자신) 제외."""
+    # TODO(#13): 스텁 — #13 실제 색인 기준 검색 (담당 B)
     index = load_index()
     scores = index["emb"] @ np.asarray(emb, dtype=np.float32)
     order = [i for i in np.argsort(-scores) if scores[i] < NEAR_DUPLICATE][:k]
@@ -84,6 +87,7 @@ def similar_works(emb: np.ndarray, k: int = 3) -> list[dict]:
 def fuse(p_clip: dict, p_cv: dict) -> list[tuple]:
     """두 관점 합치기. p_clip = predict_clip()["artists"], p_cv = predict_cv() 결과.
     [(artist, prob) × 3], 확률 내림차순. calibration.json의 w·방식을 쓴다. (스텁: 가중합만 구현)"""
+    # TODO(#15): 스텁 — #15 가중합·가중곱·RRF 비교 후 calibration.json의 방식 적용 (담당 B)
     w = load_calibration()["w"]
     names = sorted(set(p_clip) | set(p_cv))
     fused = {a: w * p_clip.get(a, 0.0) + (1 - w) * p_cv.get(a, 0.0) for a in names}
