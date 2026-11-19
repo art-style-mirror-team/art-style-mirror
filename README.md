@@ -32,6 +32,8 @@ git clone https://github.com/art-style-mirror-team/art-style-mirror.git
 cd art-style-mirror
 python3.11 -m venv .venv
 source .venv/bin/activate
+# Linux만: GPU가 없으면 CPU판 torch를 먼저 설치한다 (기본 설치는 CUDA 포함으로 수 GB)
+pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 python app.py
 ```
