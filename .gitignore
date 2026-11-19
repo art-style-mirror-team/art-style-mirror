@@ -221,3 +221,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- art-style-mirror (docs/plan.md 5장) ---
+.venv/
+data/
+samples/disagree/
+*.pt
+.gradio/
+.claude/settings.local.json
