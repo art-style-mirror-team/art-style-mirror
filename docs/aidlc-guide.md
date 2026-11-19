@@ -117,6 +117,15 @@ aidlc doctor             # "0 problems"여야 한다
 
 ## 3. 1일차: Inception 1회 (D 진행, 전원 확인) — 이슈 #2
 
+> **1일차 실제 결과 — Practices Discovery 후 중단·보관.** 아래 절차로 진행하다가 비용 대비 이익이 작다고 판단해(요구사항·Unit·계약·일정은 이미 plan.md와 이슈에 있음) 멈췄다.
+>
+> - 기록: `aidlc/spaces/default/intents/261119-mvp-inception/` (상태 `archived`, Requirements Analysis 진행 중에 멈춤. 손으로 보완한 산출물 없음)
+> - 승인된 것: Reverse Engineering(`aidlc/spaces/default/codekb/`), Practices Discovery(`aidlc/spaces/default/memory/team.md`). team.md에 확정된 규칙: 테스트는 계약 검사(`tests/test_smoke.py`) 먼저, 동작 테스트는 구현과 함께 / 커버리지 하한 없음 / 자동 배포 없음(#29만 수동) / Ruff 포매팅·린트를 CI에서 실행
+> - **기준 계획은 `docs/plan.md` + 이슈 #1~#30이다.** Construction은 이슈별로 `express`부터 쓴다.
+> - **`compose` 주의:** 시작 문장에 "이 세 단계만"이라고 적었지만 `classic` 단계(Requirements, Domain Design 등)가 그대로 들어간 계획이 나왔다. 계획안 게이트에서 **단계 목록을 직접 확인하고 Edit**하거나, 시작 후 `/aidlc --skip <단계 slug,...>`로 뺀다.
+>
+> 아래 절차는 Inception을 다시 하게 될 때를 위해 남겨 둔다.
+
 프로필은 **`classic`** 을 쓴다. "V1 방식으로 Inception과 Construction을 거쳐 Build and Test까지" 가는 프로필이라 plan.md 구조와 가장 가깝다.
 
 **시간 제한: 1일차 반나절.** 넘기면 아래 "막혔을 때"로 간다.
@@ -165,7 +174,7 @@ hooks·권한·런타임 오류로 공식 단계가 진행되지 않거나 반�
 | 함수 하나·작은 기능 | `express` (가장 가벼운 요구사항 → 코드 → 테스트) | #3–#8, #13, #16–#19, #21–#23, #27 |
 | 실험·비교가 많은 작업 | `classic` | #9–#12 판정 비교, #14–#15 보정·합치기, #20 피셔 점수, #24 등급 경계값, #26 최종 평가 |
 | 버그 수정 | `bugfix` (수정 + 회귀 테스트) | `fix/...` 브랜치 |
-| 배포 | `infra` | #29 Hugging Face Spaces |
+| 배포 (수동 1회) | `express` | #29 Hugging Face Spaces. 자동 배포는 없다(team.md). Linux라 한글 폰트(#23)와 CPU torch를 먼저 확인 |
 | 통합 | `classic` | #25 |
 
 애매하면 `/aidlc <할 일>`만 쓰면 AI가 프로필을 제안하고, 확인 후 진행한다.
