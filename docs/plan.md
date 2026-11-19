@@ -302,12 +302,15 @@ GitHub의 커밋 히스토리에 개별 커밋과 머지 기록이 모두 남아
 
 ### 9.3 브랜치 보호 (`main`)
 
-첫 뼈대 push 이후에 켠다.
-- Require a pull request before merging
+팀원 3명이 조직에 합류하고 첫 PR들이 머지된 뒤에 켠다. (승인 1명이 필수라 혼자서는 머지할 수 없기 때문이다.)
+- Require a pull request before merging: 켜기 — AI 도구의 실수로 인한 `main` 직접 push도 막는다
 - Require approvals: 1
-- Do not allow bypassing the above settings
+- Require status checks to pass: CI(`pytest`)가 생기면 켜기
+- Do not allow bypassing the above settings: **끄기** — 급한 수정은 D가 처리한다
 - Require linear history: **끄기**
 - 강제 push 금지·브랜치 삭제 금지 유지
+
+리뷰가 밀리지 않도록 리뷰 짝을 정한다: A ↔ B, C ↔ D. 짝이 하루 안에 못 보면 다른 팀원이 본다. 대기 중인 PR은 매일 스탠드업에서 확인한다.
 
 ### 9.4 운영
 
