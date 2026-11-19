@@ -130,7 +130,9 @@ art-style-mirror/
 │   └── build_profiles.py   # 화가 프로필 사전 계산 (C)
 ├── artifacts/              # embeddings.npy, meta.csv, profiles.json, linear.pkl, calibration.json
 ├── notebooks/eval.ipynb    # 판정·합치기 비교, ECE (B)
-├── aidlc-docs/             # AI-DLC 기록 (A/B/C/D 하위 폴더)
+├── .claude/                # AI-DLC 엔진 파일 (aidlc config가 생성)
+├── aidlc/                  # AI-DLC 기록 (intent별 상태·audit·산출물, 팀 규칙 memory/)
+├── aidlc.settings.json     # AI-DLC 모델 preset
 ├── samples/                # 팀원 그림·엇갈림 시험 세트
 ├── tests/
 │   └── test_smoke.py       # 전체 파이프라인이 오류 없이 도는지
@@ -333,6 +335,8 @@ GitHub의 커밋 히스토리에 개별 커밋과 머지 기록이 모두 남아
 
 팀원 4명이 모두 AI 코딩 도구를 적극 활용하되, 모두의 AI가 같은 규칙과 같은 인터페이스를 따르게 해서 통합 때 모듈이 깨지지 않게 한다. AI-DLC(AWS Labs, https://github.com/awslabs/aidlc-workflows)는 AI가 요구사항 → 설계 → 구현 → 검증을 단계별로 밟고 단계마다 사람의 승인을 받게 하는 방법론이다.
 
+> AI-DLC v2.11.4 기준. 설치·명령·프로필 선택 등 자세한 사용법은 [aidlc-guide.md](aidlc-guide.md)를 따른다.
+
 ### 10.1 저장소에 심어둘 파일
 
 | 파일 | 역할 |
@@ -340,18 +344,18 @@ GitHub의 커밋 히스토리에 개별 커밋과 머지 기록이 모두 남아
 | `AGENTS.md` | 모든 AI 도구가 읽는 팀 공통 규칙 (10.3) |
 | `CLAUDE.md` | `@AGENTS.md` 한 줄만 넣어 Claude Code도 같은 규칙을 읽게 함. `/init`으로 자동 생성하지 않는다 |
 | `contracts/interfaces.md` | 4장의 함수 시그니처. AI가 수정할 수 없는 변경 불가 기준 |
-| AI-DLC 규칙 파일 | 공식 저장소 최신 버전 안내대로 1일차에 설치 |
-| `aidlc-docs/` | AI-DLC가 남기는 요구사항·설계·진행 기록. Git에 함께 커밋 |
+| `.claude/`, `aidlc.settings.json` | AI-DLC 엔진 파일과 모델 preset. 1일차에 `aidlc config --harness claude`로 생성. AI-DLC용 Claude 안내는 `.claude/CLAUDE.md`에 들어간다 |
+| `aidlc/` | AI-DLC가 남기는 요구사항·설계·진행 기록(`aidlc/spaces/default/intents/<id>/`)과 팀 규칙(`memory/project.md`, `team.md`). Git에 함께 커밋 |
 
 ### 10.2 단계별 운영
 
 | 단계 | 시기 | 누가 | 하는 일 |
 | --- | --- | --- | --- |
-| Inception | 1일차 | D 1명, 결과는 전원 확인 | 이 계획서를 넣고 요구사항과 작업 단위를 만든다. 작업 단위는 A·B·C·D 4개로 고정하고, 결과는 PR로 `main`에 한 번만 올린다 |
-| Construction | 2~10일차 | 각 모듈 담당자 | 자기 이슈 브랜치에서 설계 → 구현 → 테스트. 각 단계 승인은 담당자 본인이 한다 |
-| Operations | 11~14일차 | 전원 | 버그 수정, README 정리, GitHub 공개 |
+| Inception | 1일차 | D 1명, 결과는 전원 확인 | `/aidlc classic`에 이 계획서를 넣고 요구사항과 작업 단위를 만든다. 작업 단위는 A·B·C·D 4개로 고정하고 서로 의존하지 않게 한다. 결과는 PR로 `main`에 한 번만 올린다 |
+| Construction | 2~10일차 | 각 모듈 담당자 | 자기 이슈 브랜치에서 이슈 하나당 intent 하나로 설계 → 구현 → 테스트. 각 단계 승인은 담당자 본인이 한다 |
+| 마무리 | 11~14일차 | 전원 | 버그 수정(`/aidlc bugfix`), README 정리, GitHub 공개. AI-DLC의 Operation 단계는 쓰지 않는다 |
 
-작은 작업(함수 하나, 버그 수정)은 AI-DLC의 가벼운 흐름으로 짧게 끝내고, 판정 모델 비교처럼 실험이 많은 작업만 전체 절차를 밟는다.
+작은 작업(함수 하나)은 `express`, 버그 수정은 `bugfix` 프로필로 짧게 끝내고, 판정 모델 비교처럼 실험이 많은 작업만 `classic`으로 전체 절차를 밟는다. 팀 Unit claim 기능(`/aidlc --claim`)은 PR 규칙과 맞지 않아 쓰지 않는다.
 
 ### 10.3 AGENTS.md 핵심 규칙
 
@@ -370,12 +374,13 @@ GitHub의 커밋 히스토리에 개별 커밋과 머지 기록이 모두 남아
 ### 10.4 기록 파일 충돌 방지
 
 - Inception 산출물은 1일차에 한 번 올리고 이후에는 고치지 않는다.
-- Construction 기록은 모듈별 하위 폴더(`aidlc-docs/` 아래 A·B·C·D)에 나눠 쓴다.
-- 공용 상태 파일에서 충돌이 나면 서로의 내용을 모두 살리는 쪽으로 합치고, 애매하면 스탠드업에서 정한다.
+- Construction 기록은 intent별 폴더(`aidlc/spaces/default/intents/<id>/`)에 따로 생기고 `audit/`도 PC별로 나뉘므로 서로 겹치지 않는다. 남의 intent 폴더는 고치지 않는다.
+- 개인 커서 파일(`active-intent`, `.aidlc-clone-id`, `.aidlc-sessions/` 등)은 커밋하지 않는다. AI-DLC가 `.gitignore`에 추가하는 블록이 막는다.
+- 팀 규칙 파일(`memory/team.md`, `project.md`)에서 충돌이 나면 서로의 내용을 모두 살리는 쪽으로 합치고, 애매하면 스탠드업에서 정한다.
 
 ### 10.5 역할별 시작 요청 예시
 
-AI-DLC를 시작하는 명령은 설치한 버전에 맞추고, 본문은 아래처럼 쓴다.
+AI-DLC는 `/aidlc <프로필>: <본문>` 형태로 시작한다(예: `/aidlc express: #21 compare() 구현...`). 이슈별 예시는 [aidlc-guide.md](aidlc-guide.md) 4장에 있다. 각 역할의 기본 본문은 아래와 같다.
 
 - **A (홍승민)**: "contracts/interfaces.md는 변경 불가. WikiArt 축소판에서 화가 24명을 로드해 70/15/15로 나누고, CLIP 임베딩을 artifacts/에 저장하는 스크립트, embed_image()·embed_text(), 소재·분위기·양식 문장쌍으로 키워드를 뽑는 clip_keywords()를 만든다."
 - **B (홍예원)**: "contracts/interfaces.md는 변경 불가. CLIP 임베딩으로 kNN·중심점·로지스틱 회귀 판정을 검증셋으로 비교해 predict_clip()을 정하고, 온도 보정과 가중합·가중곱·RRF를 비교하는 fuse()를 만든다. 테스트셋은 최종 평가에서만 쓴다."
@@ -394,7 +399,8 @@ AI-DLC를 시작하는 명령은 설치한 버전에 맞추고, 본문은 아래
 - [ ] `main` 브랜치 보호 켜기 (linear history 끄기)
 - [ ] 라벨 7개, 이슈 30개, Projects 보드
 - [ ] AGENTS.md, CLAUDE.md, contracts/interfaces.md, PR 템플릿
-- [ ] AI-DLC 설치와 Inception 1회 (PR로 올리기)
+- [ ] AI-DLC 설치(`aidlc config --harness claude`)와 Inception 1회 (PR로 올리기)
+- [ ] 4명 모두 `aidlc doctor` 통과
 - [ ] 4명 모두 첫 PR(README 팀원 표에 이름 추가) 머지 완료
 - [ ] 4명 모두 `python app.py` 실행 확인
 
