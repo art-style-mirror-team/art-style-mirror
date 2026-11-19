@@ -6,6 +6,7 @@ extract_features()·load_profiles()는 결정적인 가짜 값을 만든다.
 predict_cv()는 plan.md 6.1의 z값 거리 → 확률 식을 그대로 쓴다.
 실제 구현(#16~#20)에서 함수 이름·입출력 형식은 그대로 두고 내용만 바꾼다.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -20,7 +21,7 @@ LONG_SIDE = 512
 EPS = 0.01
 COLOR_FEATURES = ["brightness", "contrast", "saturation", "warmth", "color_diversity"]
 LINE_FEATURES = ["edge_density", "direction", "straight_ratio", "roughness", "stroke_length"]
-NUMERIC_FEATURES = COLOR_FEATURES + LINE_FEATURES   # "palette"는 수치 비교에서 뺀다
+NUMERIC_FEATURES = COLOR_FEATURES + LINE_FEATURES  # "palette"는 수치 비교에서 뺀다
 PALETTE_SIZE = 5
 
 
@@ -46,7 +47,9 @@ def preprocess_input(img: np.ndarray) -> np.ndarray:
     scale = LONG_SIDE / max(h, w)
     if scale != 1.0:
         interp = cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC
-        img = cv2.resize(img, (max(1, round(w * scale)), max(1, round(h * scale))), interpolation=interp)
+        img = cv2.resize(
+            img, (max(1, round(w * scale)), max(1, round(h * scale))), interpolation=interp
+        )
     return img
 
 
@@ -106,10 +109,17 @@ def predict_cv(features: dict, gray: bool = False) -> dict:
     used = LINE_FEATURES if gray else NUMERIC_FEATURES
     profiles = load_profiles()
     names = list(profiles)
-    D = np.array([
-        np.mean([((features[f] - profiles[a][f][0]) / max(profiles[a][f][1], EPS)) ** 2 for f in used])
-        for a in names
-    ])
+    D = np.array(
+        [
+            np.mean(
+                [
+                    ((features[f] - profiles[a][f][0]) / max(profiles[a][f][1], EPS)) ** 2
+                    for f in used
+                ]
+            )
+            for a in names
+        ]
+    )
     logits = -D / (2 * T)
     e = np.exp(logits - logits.max())
     p = e / e.sum()

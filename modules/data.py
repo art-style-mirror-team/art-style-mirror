@@ -4,6 +4,7 @@
 값은 입력에서 결정적으로 만들어지므로 같은 입력에는 항상 같은 결과가 나온다.
 실제 구현(#3~#7)에서 함수 이름·입출력 형식은 그대로 두고 내용만 바꾼다.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -43,15 +44,34 @@ ARTIST_STYLE = {
 }
 ARTISTS = list(ARTIST_STYLE)
 STYLES = sorted(set(ARTIST_STYLE.values()))
-GENRES = ["landscape", "portrait", "still_life", "religious_painting", "sketch_and_study", "genre_painting"]
+GENRES = [
+    "landscape",
+    "portrait",
+    "still_life",
+    "religious_painting",
+    "sketch_and_study",
+    "genre_painting",
+]
 
 WORKS_PER_ARTIST = 20  # 14 train / 3 val / 3 test → 70/15/15
 
 # clip_keywords()가 고르는 소재·분위기·양식 표현 (실제 구현은 반대 문장쌍 비교, #7)
 KEYWORDS = [
-    "두꺼운 붓 자국", "소용돌이치는 하늘", "선명한 원색", "차분한 색조", "부드러운 빛",
-    "강한 명암 대비", "단순한 기하학 형태", "꿈같은 분위기", "섬세한 윤곽선", "평면적인 색면",
-    "야외 풍경", "인물 초상", "정물", "어두운 배경", "밝은 햇살",
+    "두꺼운 붓 자국",
+    "소용돌이치는 하늘",
+    "선명한 원색",
+    "차분한 색조",
+    "부드러운 빛",
+    "강한 명암 대비",
+    "단순한 기하학 형태",
+    "꿈같은 분위기",
+    "섬세한 윤곽선",
+    "평면적인 색면",
+    "야외 풍경",
+    "인물 초상",
+    "정물",
+    "어두운 배경",
+    "밝은 햇살",
 ]
 
 
@@ -68,7 +88,12 @@ def _unit(v: np.ndarray) -> np.ndarray:
 
 
 def _check_image(img: np.ndarray) -> None:
-    if not isinstance(img, np.ndarray) or img.dtype != np.uint8 or img.ndim != 3 or img.shape[2] != 3:
+    if (
+        not isinstance(img, np.ndarray)
+        or img.dtype != np.uint8
+        or img.ndim != 3
+        or img.shape[2] != 3
+    ):
         raise ValueError("이미지는 RGB np.ndarray(uint8), shape (H, W, 3)이어야 합니다.")
 
 
@@ -108,14 +133,16 @@ def _build_index() -> tuple[np.ndarray, pd.DataFrame]:
         for w in range(WORKS_PER_ARTIST):
             embs.append(center + 0.7 * _unit(rng.normal(size=EMB_DIM)))
             work_id = f"{a_idx:02d}{w:03d}"
-            rows.append({
-                "id": work_id,
-                "artist": artist,
-                "style": ARTIST_STYLE[artist],
-                "genre": GENRES[w % len(GENRES)],
-                "path": f"data/wikiart/{artist.lower().replace(' ', '-')}_{work_id}.jpg",
-                "split": splits[w],
-            })
+            rows.append(
+                {
+                    "id": work_id,
+                    "artist": artist,
+                    "style": ARTIST_STYLE[artist],
+                    "genre": GENRES[w % len(GENRES)],
+                    "path": f"data/wikiart/{artist.lower().replace(' ', '-')}_{work_id}.jpg",
+                    "split": splits[w],
+                }
+            )
     emb = _unit(np.array(embs))
     emb.setflags(write=False)
     return emb, pd.DataFrame(rows, columns=["id", "artist", "style", "genre", "path", "split"])

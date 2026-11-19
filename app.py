@@ -3,6 +3,7 @@
 실행: python app.py  →  http://127.0.0.1:7860
 처리 순서는 plan.md 3장을 따른다. 각 모듈이 스텁이어도 끝까지 돈다.
 """
+
 from __future__ import annotations
 
 import gradio as gr
