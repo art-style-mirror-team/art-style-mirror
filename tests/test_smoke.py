@@ -48,6 +48,9 @@ def _is_prob_dict(p: dict) -> bool:
 # --- A: data -------------------------------------------------------------
 
 
+# A의 모델 함수 자체를 검사하는 테스트는 실제 모델이 필요하므로 `model`로 표시한다.
+# 기본 실행(CI 포함)에서는 건너뛰고, `pytest --run-model`로 실행한다.
+@pytest.mark.model
 def test_embed_image_shape_and_norm(color_img):
     e = data.embed_image(color_img)
     assert e.shape == (512,)
@@ -55,6 +58,7 @@ def test_embed_image_shape_and_norm(color_img):
     assert float(e @ data.embed_image(color_img)) >= 0.99  # #5 완료 기준
 
 
+@pytest.mark.model
 def test_embed_text_shape():
     e = data.embed_text(["vivid colors", "muted colors"])
     assert e.shape == (2, 512)
