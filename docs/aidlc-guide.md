@@ -102,11 +102,14 @@ AI-DLC 기본 규칙에는 우리 방식과 부딪히는 것이 두 가지 있�
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 irm https://github.com/awslabs/aidlc-workflows/releases/download/v2.11.4/install.ps1 | iex
 # 터미널·IDE 재시작 후
-cd art-style-mirror
+cd C:\dev\art-style-mirror  # 짧은 경로에 clone한다 (Windows 경로 260자 제한, AI-DLC 기록이 약 185자를 더한다)
 git pull
 aidlc version            # 2.11.4
-aidlc doctor --verbose   # 통과해야 한다
+aidlc config --pin 2.11.4   # 이 PC에 프로젝트 버전 고정을 등록한다. 저장소 파일은 바뀌지 않는다
+aidlc doctor             # "0 problems"여야 한다
 ```
+
+`--pin` 없이 `doctor`를 돌리면 `fail Project pin target: resolved target marker is missing`이 나온다. 버전 고정 기록은 PC마다 따로 저장되기 때문이다(1일차에 새 clone으로 확인).
 
 그다음 Claude Code를 열어 hooks 신뢰를 직접 확인·허용한다(2.3의 1번).
 
