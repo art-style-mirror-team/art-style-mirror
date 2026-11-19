@@ -36,6 +36,7 @@ CLIP(소재·분위기·양식)과 OpenCV(색·선) 두 관점의 확률을 합�
 - PR: 본문에 `Closes #<이슈번호>`, 리뷰어 1명, 파일 1~3개·변경 300줄 이내
 - 작업 시작 전 `git fetch origin` 후 `git merge origin/main`
 - 변경 후 `pytest`가 통과해야 한다. `tests/test_smoke.py`는 인터페이스 형식을 검사하므로 실제 구현으로 바꿔도 그대로 통과해야 한다.
+- 커밋 전에 `ruff format .`과 `ruff check --fix .`를 실행한다. 설정은 `pyproject.toml`(line-length 100). CI가 같은 검사를 하며 실패하면 머지하지 않는다. 규칙을 끄거나 `# noqa`로 피하려면 PR에 이유를 적는다.
 
 ## AI-DLC
 
@@ -58,4 +59,5 @@ py -3.11 -m venv .venv        # Windows. macOS/Linux: python3.11 -m venv .venv
 pip install -r requirements.txt
 python app.py                 # http://127.0.0.1:7860
 pytest
+ruff format . && ruff check --fix .
 ```
