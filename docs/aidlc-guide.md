@@ -57,27 +57,33 @@ macOS/Linux: `curl -fsSL https://github.com/awslabs/aidlc-workflows/releases/dow
 | `.mcp.json` (MCP 서버) | `--mcp none`으로 만들지 않는다. AWS를 쓰지 않는다 |
 | `aidlc.settings.local.json`, `.claude/settings.local.json` | 개인 파일, 커밋 금지 (자동으로 ignore) |
 
+1일차 실제 실행 결과(2.11.4, `--harness claude --mcp none`): 새 파일 397개(`.claude/` 388개, `aidlc/` 9개), 기존 파일 변경은 `.gitignore`의 AI-DLC 블록 추가 하나뿐이었다. 루트 `CLAUDE.md`·`AGENTS.md`는 바뀌지 않았고, 프로젝트 버전 고정(pin 2.11.4)은 config가 자동으로 등록했다. `doctor`는 문제 0개, 경고 2개였다(hooks 미실행, `aidlc/` 미커밋 — 둘 다 정상).
+
+**주의 — `.gitignore`가 AI-DLC 파일을 막지 않는지 확인한다.** 1일차에 `data/` 규칙(원본 이미지 폴더용)이 `.claude/tools/data/`까지 무시해서 AI-DLC 필수 파일 20여 개가 커밋되지 않을 뻔했다. 루트 전용 `/data/`로 고쳤다. config 후 아래 명령에 AI-DLC 블록의 개인 파일(`active-space`, `active-memory/`, `.aidlc-sessions/`)만 나와야 한다.
+
+```bash
+find .claude aidlc -type f | git check-ignore --verbose --stdin
+```
+
 config 후 **루트 `CLAUDE.md`(`@AGENTS.md` 한 줄)가 바뀌지 않았는지** 꼭 확인한다. Claude Code는 루트 `CLAUDE.md`와 `.claude/CLAUDE.md`를 둘 다 읽으므로 둘 다 있어도 된다. 생성된 `.claude/CLAUDE.md`와 `.claude/` 아래 파일은 손으로 고치지 않는다.
 
 ### 2.2 config 직후: 팀 규칙을 AI-DLC 메모리에 심기
 
-AI-DLC 기본 규칙(`aidlc/spaces/default/memory/phases/construction.md`)에는 "TODO 표시 없는 placeholder 스텁 금지"가 있다. 그대로 두면 AI가 **남의 모듈 스텁까지 구현하려 할 수 있다.** config 직후 `aidlc/spaces/default/memory/project.md`의 해당 섹션에 아래를 넣고 Inception PR에 함께 올린다. (`team.md`는 Practices Discovery 게이트에서만 고친다.)
+AI-DLC 기본 규칙에는 우리 방식과 부딪히는 것이 두 가지 있다.
+
+- `phases/construction.md`: "TODO 표시 없는 placeholder 스텁 금지". 그대로 두면 AI가 **남의 모듈 스텁까지 구현하려 할 수 있다.**
+- `org.md` Way of Working: Construction 중 AI-DLC가 만든 Bolt 브랜치를 **main에 squash 머지**하는 것이 기본값이다. 우리는 squash를 금지하고 머지 커밋만 쓴다(plan.md 9.2).
+
+그래서 config 직후 `aidlc/spaces/default/memory/project.md`에 프로젝트 규칙을 넣었다(1일차 반영 완료, 파일 참고). 핵심은 아래와 같다. `team.md`는 Practices Discovery 게이트에서만 고친다. `aidlc/active-memory/`는 자동으로 만들어지는 복사본이라 고치지 않는다.
 
 ```markdown
-## Decided
-- DECIDED: 함수 이름·입출력은 contracts/interfaces.md가 기준이며 팀 합의 PR 없이 바꾸지 않는다 (1일차, 2026-11-19)
-- DECIDED: Unit은 A 데이터·CLIP, B 판정·융합, C 색·선, D 신뢰도·UI·통합 4개이며 서로 의존하지 않는다 (1일차)
-- DECIDED: 1일차 스텁(TODO(#n) 표시)은 의도된 것이다. 각 스텁은 해당 이슈 담당자만 실제 구현으로 바꾼다 (1일차)
-
-## Forbidden
-- NEVER 자기 Unit 밖의 modules/ 파일을 수정한다 (affirmed 2026-11-19)
-- NEVER 테스트셋으로 T·w·등급 경계값을 정한다. 테스트셋은 #26에서만 쓴다 (affirmed 2026-11-19)
-- NEVER 사람의 질문 응답이나 단계 승인을 AI가 대신 채운다 (affirmed 2026-11-19)
-
-## Mandated
-- ALWAYS 변경 후 `pytest`를 실행해 통과를 확인한다 (affirmed 2026-11-19)
-- ALWAYS 명화와 사용자 입력에 같은 CLIP 모델 버전을 쓴다 (affirmed 2026-11-19)
+## Way of Working
+- **Integration branch**: main
+- main에는 PR + 리뷰 1명 승인 후 머지 커밋으로만 합친다. org 기본값의 squash·rebase 머지는 쓰지 않는다.
+- Construction은 지금 체크아웃한 이슈 브랜치에서 진행한다. 별도 worktree·Bolt 브랜치를 만들지 않는다.
 ```
+
+그 밖에 `Walking Skeleton`(1일차 스텁 + `pytest`), `Testing Posture`, `Tech Stack`, `Decided` 5개(계약 불변, Unit 4개 독립, 스텁은 담당자만, 요구사항 출처는 plan.md·이슈, 순위는 `fuse()`만), `Forbidden` 6개, `Mandated` 5개가 들어 있다. 규칙을 바꾸려면 이 파일을 고치는 PR을 올린다.
 
 ### 2.3 Inception 전에: 실제로 도는지 확인 (30분)
 
@@ -96,17 +102,29 @@ AI-DLC 기본 규칙(`aidlc/spaces/default/memory/phases/construction.md`)에는
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 irm https://github.com/awslabs/aidlc-workflows/releases/download/v2.11.4/install.ps1 | iex
 # 터미널·IDE 재시작 후
-cd art-style-mirror
+cd C:\dev\art-style-mirror  # 짧은 경로에 clone한다 (Windows 경로 260자 제한, AI-DLC 기록이 약 185자를 더한다)
 git pull
 aidlc version            # 2.11.4
-aidlc doctor --verbose   # 통과해야 한다
+aidlc config --pin 2.11.4   # 이 PC에 프로젝트 버전 고정을 등록한다. 저장소 파일은 바뀌지 않는다
+aidlc doctor             # "0 problems"여야 한다
 ```
+
+`--pin` 없이 `doctor`를 돌리면 `fail Project pin target: resolved target marker is missing`이 나온다. 버전 고정 기록은 PC마다 따로 저장되기 때문이다(1일차에 새 clone으로 확인).
 
 그다음 Claude Code를 열어 hooks 신뢰를 직접 확인·허용한다(2.3의 1번).
 
 그다음 Claude Code에서 "이 저장소의 규칙을 요약해 줘"라고 물어서 `AGENTS.md`의 규칙(자기 모듈만 수정, 계약 변경 금지 등)을 실제로 읽는지 확인한다. (plan.md 10.5 마지막 줄)
 
 ## 3. 1일차: Inception 1회 (D 진행, 전원 확인) — 이슈 #2
+
+> **1일차 실제 결과 — Practices Discovery 후 중단·보관.** 아래 절차로 진행하다가 비용 대비 이익이 작다고 판단해(요구사항·Unit·계약·일정은 이미 plan.md와 이슈에 있음) 멈췄다.
+>
+> - 기록: `aidlc/spaces/default/intents/261119-mvp-inception/` (상태 `archived`, Requirements Analysis 진행 중에 멈춤. 손으로 보완한 산출물 없음)
+> - 승인된 것: Reverse Engineering(`aidlc/spaces/default/codekb/`), Practices Discovery(`aidlc/spaces/default/memory/team.md`). team.md에 확정된 규칙: 테스트는 계약 검사(`tests/test_smoke.py`) 먼저, 동작 테스트는 구현과 함께 / 커버리지 하한 없음 / 자동 배포 없음(#29만 수동) / Ruff 포매팅·린트를 CI에서 실행
+> - **기준 계획은 `docs/plan.md` + 이슈 #1~#30이다.** Construction은 이슈별로 `express`부터 쓴다.
+> - **`compose` 주의:** 시작 문장에 "이 세 단계만"이라고 적었지만 `classic` 단계(Requirements, Domain Design 등)가 그대로 들어간 계획이 나왔다. 계획안 게이트에서 **단계 목록을 직접 확인하고 Edit**하거나, 시작 후 `/aidlc --skip <단계 slug,...>`로 뺀다.
+>
+> 아래 절차는 Inception을 다시 하게 될 때를 위해 남겨 둔다.
 
 프로필은 **`classic`** 을 쓴다. "V1 방식으로 Inception과 Construction을 거쳐 Build and Test까지" 가는 프로필이라 plan.md 구조와 가장 가깝다.
 
@@ -156,7 +174,7 @@ hooks·권한·런타임 오류로 공식 단계가 진행되지 않거나 반�
 | 함수 하나·작은 기능 | `express` (가장 가벼운 요구사항 → 코드 → 테스트) | #3–#8, #13, #16–#19, #21–#23, #27 |
 | 실험·비교가 많은 작업 | `classic` | #9–#12 판정 비교, #14–#15 보정·합치기, #20 피셔 점수, #24 등급 경계값, #26 최종 평가 |
 | 버그 수정 | `bugfix` (수정 + 회귀 테스트) | `fix/...` 브랜치 |
-| 배포 | `infra` | #29 Hugging Face Spaces |
+| 배포 (수동 1회) | `express` | #29 Hugging Face Spaces. 자동 배포는 없다(team.md). Linux라 한글 폰트(#23)와 CPU torch를 먼저 확인 |
 | 통합 | `classic` | #25 |
 
 애매하면 `/aidlc <할 일>`만 쓰면 AI가 프로필을 제안하고, 확인 후 진행한다.

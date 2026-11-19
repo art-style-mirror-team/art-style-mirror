@@ -368,7 +368,7 @@ GitHub의 커밋 히스토리에 개별 커밋과 머지 기록이 모두 남아
 
 | 단계 | 시기 | 누가 | 하는 일 |
 | --- | --- | --- | --- |
-| Inception | 1일차 | D 1명, 결과는 전원 확인 | `/aidlc classic`에 이 계획서를 넣고 요구사항과 작업 단위를 만든다. 작업 단위는 A·B·C·D 4개로 고정하고 서로 의존하지 않게 한다. 결과는 PR로 `main`에 한 번만 올린다 |
+| Inception | 1일차 | D 1명, 결과는 전원 확인 | 경량 Inception으로 Reverse Engineering과 Practices Discovery(팀 규칙 확정, `team.md`)까지 승인하고 중단·보관했다. 요구사항·작업 단위·계약은 이 계획서와 이슈, `contracts/interfaces.md`가 기준이다(작업 단위 A·B·C·D 4개, 서로 의존하지 않음). 결과는 PR로 `main`에 한 번 올린다 |
 | Construction | 2~10일차 | 각 모듈 담당자 | 자기 이슈 브랜치에서 이슈 하나당 intent 하나로 설계 → 구현 → 테스트. 각 단계 승인은 담당자 본인이 한다 |
 | 마무리 | 11~14일차 | 전원 | 버그 수정(`/aidlc bugfix`), README 정리, GitHub 공개. AI-DLC의 Operation 단계는 쓰지 않는다 |
 
@@ -416,7 +416,7 @@ AI-DLC는 `/aidlc <프로필>: <본문>` 형태로 시작한다(예: `/aidlc exp
 - [ ] `main` 브랜치 보호 켜기 (linear history 끄기)
 - [ ] 라벨 7개, 이슈 30개, Projects 보드
 - [ ] AGENTS.md, CLAUDE.md, contracts/interfaces.md, PR 템플릿
-- [ ] AI-DLC 설치(`aidlc config --harness claude`)와 Inception 1회 (PR로 올리기)
+- [x] AI-DLC 설치(`aidlc config --harness claude`)와 Inception 1회 (Practices Discovery까지 승인 후 중단·보관, PR로 올리기)
 - [ ] 4명 모두 `aidlc doctor` 통과
 - [ ] 4명 모두 첫 PR(README 팀원 표에 이름 추가) 머지 완료
 - [ ] 4명 모두 `python app.py` 실행 확인

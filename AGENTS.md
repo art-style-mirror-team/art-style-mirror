@@ -45,7 +45,8 @@ CLIP(소재·분위기·양식)과 OpenCV(색·선) 두 관점의 확률을 합�
 - 시작 문장에 이슈 번호, 수정할 파일, "contracts/interfaces.md는 변경 불가"를 넣는다.
 - 계약 설계 단계에서 `contracts/interfaces.md`와 다른 계약을 만들지 않는다. Unit은 A·B·C·D 4개로 고정하고 서로 의존하지 않게 한다.
 - 각 단계 승인은 그 이슈의 담당자 본인이 한다. **AI는 사람의 질문 응답·단계 승인·hooks 신뢰를 대신 채우거나 승인된 것처럼 기록하지 않는다.** 게이트가 막히면 실제 상태를 그대로 보고한다.
-- AI-DLC 버전은 `.aidlc-version`을 따른다. `aidlc config`를 다시 돌리거나 `.claude/` 생성 파일을 고치지 않는다(설정 변경은 D가 PR로).
+- AI-DLC 버전은 `.aidlc-version`을 따른다. `aidlc config`를 다시 돌리거나 `.claude/` 생성 파일을 고치지 않는다(설정 변경은 D가 PR로). 예외: clone 후 각자 PC에서 `aidlc config --pin 2.11.4`(버전 고정 등록, 저장소 파일 변경 없음)는 실행한다.
+- 프로젝트 규칙의 AI-DLC 쪽 기준은 `aidlc/spaces/default/memory/project.md`다. `aidlc/active-memory/`는 자동 생성 복사본이라 고치지 않는다.
 - 기록은 `aidlc/spaces/default/intents/<id>/`에 남기고 코드와 같은 PR로 커밋한다. 남의 intent 폴더는 고치지 않는다. 개인 커서·세션 파일은 커밋하지 않는다.
 - 팀 Unit claim(`/aidlc --claim`, `unit share/publish/land`)과 Operation 단계는 쓰지 않는다.
 
