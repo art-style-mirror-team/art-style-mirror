@@ -224,7 +224,7 @@ __marimo__/
 
 # --- art-style-mirror (docs/plan.md 5장) ---
 .venv/
-data/
+/data/
 samples/disagree/
 *.pt
 .gradio/
