@@ -315,7 +315,21 @@ GitHub의 커밋 히스토리에 개별 커밋과 머지 기록이 모두 남아
 ### 9.4 운영
 
 - **매일 10분 스탠드업**: 어제 한 일, 오늘 할 일, 막힌 점
-- **진행 상황**: GitHub Projects 보드(Todo / In Progress / Review / Done)
+- **진행 상황**: [GitHub Projects 보드](https://github.com/orgs/art-style-mirror-team/projects/1)(Todo / In Progress / Review / Done). 카드 이동 규칙은 아래와 같다.
+
+| 열 | 들어가는 때 | 누가 |
+| --- | --- | --- |
+| Todo | 이슈가 보드에 추가될 때 | 자동 |
+| In Progress | 이슈 브랜치를 만들고 작업을 시작할 때 | **담당자가 직접** |
+| Review | 본문에 `Closes #n`이 있는 PR을 열 때 | 자동 |
+| Done | PR이 머지되어 `Closes #n`으로 이슈가 닫힐 때 | 자동 |
+
+- PR은 리뷰받을 준비가 됐을 때 연다. 중간에 Draft PR을 열려면 `Closes #n`을 빼 두었다가 Ready로 바꿀 때 넣는다(넣는 순간 카드가 Review로 간다).
+- `Closes #n`은 반드시 쓴다. 빠뜨렸다면 머지 후 카드를 Done으로 옮긴다. 그러면 이슈가 자동으로 닫힌다.
+- 한 사람이 동시에 In Progress에 두는 카드는 2개 이하로 한다. 막히면 카드를 그대로 두고 이슈 댓글과 스탠드업에 알린다.
+- 리뷰에서 수정 요청을 받아도 카드는 Review에 둔다. 머지되지 않고 PR을 닫으면 카드를 In Progress로 되돌린다.
+- 스탠드업은 보드를 띄워 놓고 Review 열(대기 중인 리뷰)부터 본다.
+- 보드의 Status 선택지는 화면에서만 추가·수정한다. API로 통째로 바꾸면 워크플로가 참조하는 값이 사라져 자동화가 꺼진다(1일차에 실제로 겪음).
 - **막히면**: 2시간 넘게 막히면 바로 공유
 
 ### 9.5 리스크와 플랜 B
