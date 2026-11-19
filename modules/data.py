@@ -81,6 +81,7 @@ def _artist_directions() -> np.ndarray:
 
 def embed_image(img: np.ndarray) -> np.ndarray:
     """CLIP 이미지 임베딩. shape (512,), L2 정규화. (스텁: 이미지 바이트로 만든 가짜 벡터)"""
+    # TODO(#5): 스텁 — #5 실제 CLIP 이미지 임베딩 (담당 A)
     _check_image(img)
     rng = np.random.default_rng(_seed(img.tobytes(), str(img.shape)))
     # 입력도 어느 한 화가 쪽으로 약간 기울게 해서 Top 3가 뚜렷하게 보이게 한다.
@@ -90,6 +91,7 @@ def embed_image(img: np.ndarray) -> np.ndarray:
 
 def embed_text(texts: list[str]) -> np.ndarray:
     """문장 임베딩. shape (n, 512), 각 행 L2 정규화. (스텁: 문장으로 만든 가짜 벡터)"""
+    # TODO(#5): 스텁 — #5 실제 CLIP 문장 임베딩 (담당 A)
     if isinstance(texts, str):
         texts = [texts]
     rows = [np.random.default_rng(_seed("text", t)).normal(size=EMB_DIM) for t in texts]
@@ -121,12 +123,14 @@ def _build_index() -> tuple[np.ndarray, pd.DataFrame]:
 
 def load_index() -> dict:
     """{"emb": (N, 512), "meta": DataFrame[id, artist, style, genre, path, split]}. (스텁: 화가 24명 × 20점)"""
+    # TODO(#3): 스텁 — #3, #4 artifacts/embeddings.npy·meta.csv 로드 (담당 A)
     emb, meta = _build_index()
     return {"emb": emb, "meta": meta.copy()}
 
 
 def clip_keywords(emb: np.ndarray, k: int = 3) -> list[tuple]:
     """CLIP 키워드 설명. [("두꺼운 붓 자국", 0.71), ...] 점수 내림차순. (스텁: 임베딩으로 고른 가짜 키워드)"""
+    # TODO(#7): 스텁 — #7 반대 문장쌍 비교 + 표현 앙상블 (담당 A)
     emb = np.asarray(emb, dtype=np.float32)
     rng = np.random.default_rng(_seed(emb.tobytes()))
     picks = rng.choice(len(KEYWORDS), size=min(k, len(KEYWORDS)), replace=False)
