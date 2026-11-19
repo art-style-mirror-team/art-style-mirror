@@ -1,5 +1,6 @@
 """전체 파이프라인이 오류 없이 돌고, 각 함수가 contracts/interfaces.md 형식을 지키는지 확인한다.
 실제 구현으로 바꾼 뒤에도 이 테스트는 그대로 통과해야 한다."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -11,8 +12,17 @@ import app
 from modules import classify, data, explain, features
 
 FEATURE_KEYS = {
-    "brightness", "contrast", "saturation", "warmth", "color_diversity",
-    "edge_density", "direction", "straight_ratio", "roughness", "stroke_length", "palette",
+    "brightness",
+    "contrast",
+    "saturation",
+    "warmth",
+    "color_diversity",
+    "edge_density",
+    "direction",
+    "straight_ratio",
+    "roughness",
+    "stroke_length",
+    "palette",
 }
 
 
@@ -28,16 +38,21 @@ def sketch_img() -> np.ndarray:
 
 
 def _is_prob_dict(p: dict) -> bool:
-    return bool(p) and all(isinstance(k, str) and 0 <= v <= 1 for k, v in p.items()) and abs(sum(p.values()) - 1) < 1e-6
+    return (
+        bool(p)
+        and all(isinstance(k, str) and 0 <= v <= 1 for k, v in p.items())
+        and abs(sum(p.values()) - 1) < 1e-6
+    )
 
 
 # --- A: data -------------------------------------------------------------
+
 
 def test_embed_image_shape_and_norm(color_img):
     e = data.embed_image(color_img)
     assert e.shape == (512,)
     assert abs(np.linalg.norm(e) - 1) < 1e-5
-    assert float(e @ data.embed_image(color_img)) >= 0.99   # #5 완료 기준
+    assert float(e @ data.embed_image(color_img)) >= 0.99  # #5 완료 기준
 
 
 def test_embed_text_shape():
@@ -64,6 +79,7 @@ def test_clip_keywords_format(color_img):
 
 
 # --- B: classify ---------------------------------------------------------
+
 
 def test_classify_formats(color_img):
     emb = data.embed_image(color_img)
@@ -92,6 +108,7 @@ def test_similar_works_excludes_itself():
 
 # --- C: features ---------------------------------------------------------
 
+
 def test_preprocess_and_grayscale(color_img, sketch_img):
     out = features.preprocess_input(color_img)
     assert out.dtype == np.uint8 and out.ndim == 3 and out.shape[2] == 3
@@ -118,6 +135,7 @@ def test_load_profiles_format():
 
 # --- D: explain ----------------------------------------------------------
 
+
 def test_assess_confidence_format():
     p_clip = {"a": 0.7, "b": 0.2, "c": 0.1}
     conf = explain.assess_confidence([("a", 0.6), ("b", 0.3), ("c", 0.1)], p_clip, p_clip, 0.9)
@@ -137,13 +155,16 @@ def test_compare_with_fake_profiles():
         "A": {"brightness": (0.8, 0.1), "contrast": (0.2, 0.1), "warmth": (0.5, 0.1)},
         "B": {"brightness": (0.2, 0.1), "contrast": (0.8, 0.1), "warmth": (0.5, 0.1)},
     }
-    out = explain.compare({"brightness": 0.75, "contrast": 0.7, "warmth": 0.5, "palette": []}, profiles, "A", "B")
+    out = explain.compare(
+        {"brightness": 0.75, "contrast": 0.7, "warmth": 0.5, "palette": []}, profiles, "A", "B"
+    )
     assert out["why_top1"] == ["brightness"]
     assert out["toward_top2"] == ["contrast"]
     assert set(out["z"]) == {"brightness", "contrast", "warmth"}
 
 
 # --- 전체 파이프라인 ------------------------------------------------------
+
 
 @pytest.mark.parametrize("fixture", ["color_img", "sketch_img"])
 def test_pipeline_end_to_end(request, fixture):

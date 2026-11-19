@@ -53,6 +53,9 @@
 
 <!-- Project-specific specialisation. -->
 
+- Ruff 설정은 `pyproject.toml`에 있다(target py311, line-length 100, 기본 규칙 + import 정렬 `I`). 코드를 쓴 뒤 `ruff format .`과 `ruff check --fix .`를 실행한다. CI의 `ruff (format + lint)` 검사가 통과해야 머지한다.
+- `.claude/`, `aidlc/`는 AI-DLC 생성 파일이라 Ruff 검사 대상에서 뺀다.
+
 ## Tech Stack
 
 <!-- Technology choices locked for this project. -->

@@ -4,6 +4,7 @@
 가짜 색인(load_index)의 학습셋 중심점으로 확률을 만들기 때문에 형식뿐 아니라 흐름도 실제와 비슷하다.
 실제 구현(#8~#15)에서 함수 이름·입출력 형식은 그대로 두고 내용만 바꾼다.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,8 +18,8 @@ from modules.data import load_index
 CALIBRATION_PATH = Path(__file__).resolve().parent.parent / "artifacts" / "calibration.json"
 # calibration.json이 없을 때 쓰는 기본값 (plan.md 9.5 플랜 B: T = 1, 가중합 w = 0.8)
 DEFAULT_CALIBRATION = {"T_clip": 1.0, "T_cv": 1.0, "w": 0.8, "method": "weighted_sum"}
-LOGIT_SCALE = 20.0       # 코사인 유사도 → 점수 배율 (스텁용)
-NEAR_DUPLICATE = 0.95    # similar_works()에서 이 값 이상은 같은 작품으로 보고 제외
+LOGIT_SCALE = 20.0  # 코사인 유사도 → 점수 배율 (스텁용)
+NEAR_DUPLICATE = 0.95  # similar_works()에서 이 값 이상은 같은 작품으로 보고 제외
 
 
 def load_calibration() -> dict:

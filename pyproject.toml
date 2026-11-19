@@ -1,0 +1,15 @@
+# 도구 설정만 둔다. 패키지로 배포하지 않는다.
+
+[tool.ruff]
+target-version = "py311"
+# 한글 docstring·문자열이 길어 기본값(88) 대신 100을 쓴다.
+line-length = 100
+# AI-DLC가 생성한 파일(.claude/, aidlc/)은 검사하지 않는다.
+extend-exclude = [".claude", "aidlc"]
+
+[tool.ruff.lint]
+# 기본 규칙(pycodestyle 오류 E4·E7·E9, Pyflakes F) + import 정렬(I)
+extend-select = ["I"]
+
+[tool.ruff.format]
+quote-style = "double"

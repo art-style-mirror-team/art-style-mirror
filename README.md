@@ -40,6 +40,13 @@ python app.py
 
 브라우저에서 http://127.0.0.1:7860 을 엽니다. 테스트는 `pytest`로 돌립니다.
 
+커밋 전에는 포매팅과 린트를 실행합니다. PR마다 CI가 같은 검사를 합니다.
+
+```bash
+ruff format .
+ruff check --fix .
+```
+
 ## 팀원
 
 | 역할 | 이름 | GitHub | 맡는 일 |

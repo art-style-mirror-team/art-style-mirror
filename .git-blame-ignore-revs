@@ -1,0 +1,5 @@
+# git blame에서 제외할 일괄 포매팅 커밋 (GitHub blame이 자동으로 읽는다)
+# 로컬: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: Ruff 포매팅 일괄 적용
+28f36d8921529f730f8b6501271f2644022f834e

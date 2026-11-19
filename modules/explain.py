@@ -4,6 +4,7 @@
 지표(1·2위 차이, 정규화 엔트로피, JSD)는 plan.md 6.3 식대로 계산하고,
 등급 경계값만 임시값을 쓴다(#24에서 검증셋으로 확정).
 """
+
 from __future__ import annotations
 
 import math
@@ -43,7 +44,13 @@ LEVEL_NOTE = {
     "낮음": "뚜렷하게 닮은 화가가 없어요.",
 }
 DISCLAIMER = "픽셀 수치 기반의 통계적 해석이며 미술사적 평가가 아닙니다."
-_KO_FONT_CANDIDATES = ["Malgun Gothic", "AppleGothic", "NanumGothic", "Noto Sans CJK KR", "Noto Sans KR"]
+_KO_FONT_CANDIDATES = [
+    "Malgun Gothic",
+    "AppleGothic",
+    "NanumGothic",
+    "Noto Sans CJK KR",
+    "Noto Sans KR",
+]
 
 
 def _ranked(p) -> list[tuple]:
@@ -90,7 +97,13 @@ def assess_confidence(p_fused, p_clip: dict, p_cv: dict, max_sim: float) -> dict
         level = "높음"
     else:
         level = "보통"
-    return {"level": level, "margin": float(margin), "entropy": entropy, "jsd": jsd, "max_sim": max_sim}
+    return {
+        "level": level,
+        "margin": float(margin),
+        "entropy": entropy,
+        "jsd": jsd,
+        "max_sim": max_sim,
+    }
 
 
 def compare(features: dict, profiles: dict, top1: str, top2: str) -> dict:
@@ -98,15 +111,22 @@ def compare(features: dict, profiles: dict, top1: str, top2: str) -> dict:
     why_top1 = 1위 평균에 더 가까운 특징, toward_top2 = 2위 평균에 더 가까운 특징 (차이가 큰 순)."""
     p1, p2 = profiles[top1], profiles[top2]
     usable = [
-        f for f in p1
-        if f in p2 and isinstance(features.get(f), (int, float)) and not isinstance(features.get(f), bool)
+        f
+        for f in p1
+        if f in p2
+        and isinstance(features.get(f), (int, float))
+        and not isinstance(features.get(f), bool)
     ]
     z1 = {f: (features[f] - p1[f][0]) / max(p1[f][1], EPS) for f in usable}
     z2 = {f: (features[f] - p2[f][0]) / max(p2[f][1], EPS) for f in usable}
-    gap = {f: abs(z2[f]) - abs(z1[f]) for f in usable}   # 양수 = 1위 쪽이 더 가까움
+    gap = {f: abs(z2[f]) - abs(z1[f]) for f in usable}  # 양수 = 1위 쪽이 더 가까움
     why_top1 = [f for f in sorted(usable, key=lambda f: -gap[f]) if gap[f] > 0][:2]
     toward_top2 = [f for f in sorted(usable, key=lambda f: gap[f]) if gap[f] < 0][:2]
-    return {"why_top1": why_top1, "toward_top2": toward_top2, "z": {f: float(z1[f]) for f in usable}}
+    return {
+        "why_top1": why_top1,
+        "toward_top2": toward_top2,
+        "z": {f: float(z1[f]) for f in usable},
+    }
 
 
 @lru_cache(maxsize=1)
@@ -116,7 +136,7 @@ def _korean_font() -> str | None:
 
 
 def _radar_value(feature: str, value: float) -> float:
-    if feature == "direction":   # 각도(0~180)를 0~1로
+    if feature == "direction":  # 각도(0~180)를 0~1로
         value = value / 180.0
     return float(min(1.0, max(0.0, value)))
 
@@ -130,14 +150,19 @@ def _radar(features: dict, profile: dict, artist: str) -> Figure:
 
     fig = Figure(figsize=(5, 5), dpi=100)
     ax = fig.add_subplot(projection="polar")
-    for vals, label, color, style in ((mine, "내 그림", "#d9480f", "-"), (theirs, f"{artist} 평균", "#1c7ed6", "--")):
+    for vals, label, color, style in (
+        (mine, "내 그림", "#d9480f", "-"),
+        (theirs, f"{artist} 평균", "#1c7ed6", "--"),
+    ):
         ax.plot(angles + angles[:1], vals + vals[:1], style, color=color, linewidth=2, label=label)
         ax.fill(angles + angles[:1], vals + vals[:1], color=color, alpha=0.15)
     ax.set_xticks(angles)
     ax.set_xticklabels([FEATURE_KO[f] for f in names], fontfamily=font)
     ax.set_ylim(0, 1)
     ax.set_yticklabels([])
-    ax.legend(loc="upper right", bbox_to_anchor=(1.25, 1.12), prop={"family": font} if font else None)
+    ax.legend(
+        loc="upper right", bbox_to_anchor=(1.25, 1.12), prop={"family": font} if font else None
+    )
     fig.tight_layout()
     return fig
 
@@ -160,10 +185,17 @@ def render_card(result: dict) -> tuple[str, Figure]:
     lines = [f"### {TYPE_INTRO.get(result['input_type'], '이 이미지는')} 이런 화가와 닮았어요", ""]
 
     if level == "낮음":
-        lines.append(f"**신뢰 등급: {level}** — {LEVEL_NOTE[level]} 두 관점의 결과를 따로 보여드릴게요.")
+        lines.append(
+            f"**신뢰 등급: {level}** — {LEVEL_NOTE[level]} 두 관점의 결과를 따로 보여드릴게요."
+        )
         lines.append("")
-        lines.append("- 소재·분위기·양식(CLIP): " + ", ".join(f"{a} {_pct(p)}" for a, p in result["p_clip_top"]))
-        lines.append("- 색·선(OpenCV): " + ", ".join(f"{a} {_pct(p)}" for a, p in result["p_cv_top"]))
+        lines.append(
+            "- 소재·분위기·양식(CLIP): "
+            + ", ".join(f"{a} {_pct(p)}" for a, p in result["p_clip_top"])
+        )
+        lines.append(
+            "- 색·선(OpenCV): " + ", ".join(f"{a} {_pct(p)}" for a, p in result["p_cv_top"])
+        )
     else:
         for i, (artist, p) in enumerate(top3, 1):
             lines.append(f"{i}. **{artist}** — {_pct(p)}")
@@ -181,12 +213,17 @@ def render_card(result: dict) -> tuple[str, Figure]:
 
     comp = result["comparison"]
     if comp["why_top1"]:
-        lines.append(f"**{top1}인 이유**: {_ko_list(comp['why_top1'])}이(가) {top1} 평균에 더 가까워요.")
+        lines.append(
+            f"**{top1}인 이유**: {_ko_list(comp['why_top1'])}이(가) {top1} 평균에 더 가까워요."
+        )
     if top2 and comp["toward_top2"]:
         lines.append(f"**{top2} 느낌이 나는 부분**: {_ko_list(comp['toward_top2'])}")
 
     if result["similar"]:
-        lines.append("**비슷한 명화**: " + ", ".join(f"{w['artist']} #{w['id']} ({w['score']:.2f})" for w in result["similar"]))
+        lines.append(
+            "**비슷한 명화**: "
+            + ", ".join(f"{w['artist']} #{w['id']} ({w['score']:.2f})" for w in result["similar"])
+        )
 
     lines.append(
         f"\n<sub>1·2위 차이 {conf['margin']:.2f} · 엔트로피 {conf['entropy']:.2f} · "
