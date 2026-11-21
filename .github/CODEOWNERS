@@ -1,0 +1,33 @@
+# PR을 열면 아래 사람이 리뷰어로 자동 지정된다. 아래쪽 줄이 위쪽 줄보다 우선한다.
+#
+# 이 팀은 자기 모듈 파일을 담당자만 수정하므로(AGENTS.md 규칙 1), 모듈에는 담당자가 아니라
+# 그 담당자의 리뷰 짝을 적는다(plan.md 9.4: A ↔ B, C ↔ D). 작성자는 자동 지정에서 빠진다.
+#
+#   A 홍승민   (아이디는 초대 수락 후 추가)
+#   B 홍예원   @dpdnjsh
+#   C 심현준   @shj0228
+#   D 김현승   @KimHyeonSeung1213
+#
+# 리뷰 승인 1명은 브랜치 보호가 요구한다. 이 파일은 리뷰어를 자동으로 부를 뿐 승인 권한을 제한하지 않는다.
+
+# 기본: 저장소 설정·문서·CI는 D가 주로 바꾸므로 D의 짝 C가 본다.
+*                           @shj0228
+
+# A 데이터·CLIP (작성 A) → B가 리뷰
+/modules/data.py            @dpdnjsh
+/scripts/build_index.py     @dpdnjsh
+
+# B 판정·융합 (작성 B) → A가 리뷰. A 합류 전까지는 D가 대신 본다. TODO: A 아이디로 바꾸기
+/modules/classify.py        @KimHyeonSeung1213
+/notebooks/                 @KimHyeonSeung1213
+
+# C 색·선 (작성 C) → D가 리뷰
+/modules/features.py        @KimHyeonSeung1213
+/scripts/build_profiles.py  @KimHyeonSeung1213
+
+# D 신뢰도·UI·통합 (작성 D) → C가 리뷰
+/modules/explain.py         @shj0228
+/app.py                     @shj0228
+
+# 계약은 팀 합의 사항이라 전원에게 요청한다(작성자는 자동으로 빠짐). TODO: A 추가
+/contracts/                 @KimHyeonSeung1213 @dpdnjsh @shj0228
