@@ -39,7 +39,9 @@ def analyze(img: np.ndarray) -> dict:
     profiles = features.load_profiles()
     top1 = top3[0][0]
     top2 = top3[1][0] if len(top3) > 1 else top1
-    comparison = explain.compare(feats, profiles, top1, top2)
+    # 스케치는 색 특징을 빼고 선 특징만 대조한다(predict_cv(gray=True)와 같은 기준).
+    cmp_feats = {f: feats[f] for f in features.LINE_FEATURES if f in feats} if gray else feats
+    comparison = explain.compare(cmp_feats, profiles, top1, top2)
 
     def _top(p: dict, k: int = 3) -> list[tuple]:
         return sorted(p.items(), key=lambda x: -x[1])[:k]

@@ -111,6 +111,28 @@ def test_unknown_artist_raises():
         explain.compare({"brightness": 0.5}, PROFILES, "A", "Z")
 
 
+@pytest.mark.parametrize("gray_input", [True, False])
+def test_analyze_drops_color_features_only_for_sketch(gray_input):
+    import app
+    from modules import features
+
+    rng = np.random.default_rng(3)
+    if gray_input:
+        g = rng.integers(150, 256, size=(600, 400), dtype=np.uint8)
+        img = np.stack([g, g, g], axis=-1)
+    else:
+        img = rng.integers(0, 256, size=(600, 400, 3), dtype=np.uint8)
+    result = app.analyze(img)
+    assert result["gray"] is gray_input
+    used = set(result["comparison"]["z"])
+    if gray_input:
+        assert used and used <= set(features.LINE_FEATURES)
+    else:
+        assert used & set(features.COLOR_FEATURES)
+    # 화면용 features는 그대로 11개 키를 유지한다
+    assert "saturation" in result["features"]
+
+
 def test_empty_features():
     out = explain.compare({}, PROFILES, "A", "B")
     assert out == {"why_top1": [], "toward_top2": [], "z": {}}
