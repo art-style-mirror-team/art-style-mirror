@@ -96,5 +96,8 @@ def build_demo() -> gr.Blocks:
     return demo
 
 
+# `gradio app.py`(코드를 저장하면 자동 재시작)는 모듈의 `demo` 변수를 찾아 띄운다.
+demo = build_demo()
+
 if __name__ == "__main__":
-    build_demo().launch(server_name="127.0.0.1")
+    demo.launch(server_name="127.0.0.1")
