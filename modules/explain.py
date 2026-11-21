@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import math
+import numbers
 from functools import lru_cache
 
 import numpy as np
@@ -16,6 +17,7 @@ from matplotlib.figure import Figure
 from scipy.spatial.distance import jensenshannon
 
 EPS = 0.01
+GAP_TOL = 1e-9  # compare(): |z| 차이가 이보다 작으면 1·2위 어느 쪽에도 넣지 않는다(부동소수 잡음)
 
 # 임시 등급 경계값 — #24에서 "높음 등급 정확도 80% 이상"이 되도록 검증셋으로 다시 정한다.
 HIGH_MARGIN, HIGH_JSD_MAX, HIGH_SIM_MIN = 0.15, 0.30, 0.75
@@ -106,26 +108,56 @@ def assess_confidence(p_fused, p_clip: dict, p_cv: dict, max_sim: float) -> dict
     }
 
 
+def _finite_number(v) -> bool:
+    """bool이 아닌 유한한 실수인지. numpy 실수(np.float32 등)도 받는다."""
+    return isinstance(v, numbers.Real) and not isinstance(v, bool) and math.isfinite(float(v))
+
+
+def _usable_stat(stat) -> bool:
+    """프로필 값 (mean, std)가 쓸 수 있는 모양인지."""
+    return (
+        isinstance(stat, (tuple, list))
+        and len(stat) == 2
+        and _finite_number(stat[0])
+        and _finite_number(stat[1])
+    )
+
+
 def compare(features: dict, profiles: dict, top1: str, top2: str) -> dict:
     """1·2위 대조. {"why_top1": [특징 이름 ≤2], "toward_top2": [특징 이름 ≤2], "z": {feature: 1위 기준 z값}}.
-    why_top1 = 1위 평균에 더 가까운 특징, toward_top2 = 2위 평균에 더 가까운 특징 (차이가 큰 순)."""
+    why_top1 = 1위 평균에 더 가까운 특징, toward_top2 = 2위 평균에 더 가까운 특징 (차이가 큰 순).
+
+    - 비교 대상은 features와 두 화가 프로필에 모두 있고 유한한 수인 특징뿐이다. palette처럼 수가 아닌
+      값, NaN·inf, 모양이 틀린 프로필 값은 건너뛴다. 스케치일 때 색 특징을 빼는 일은 호출하는 쪽
+      (app.analyze)이 features에서 미리 빼서 한다.
+    - top1 == top2이면 대조할 상대가 없으므로 두 목록은 비우고 z만 채운다.
+    - 차이가 같으면(동점) 특징 이름 순으로 정해 결과가 매번 같게 한다.
+    - 프로필에 없는 화가가 오면 KeyError를 낸다(조용히 빈 설명을 내지 않는다).
+    """
+    missing = [a for a in (top1, top2) if a not in profiles]
+    if missing:
+        raise KeyError(f"compare(): 프로필에 없는 화가 {missing}")
     p1, p2 = profiles[top1], profiles[top2]
     usable = [
         f
         for f in p1
         if f in p2
-        and isinstance(features.get(f), (int, float))
-        and not isinstance(features.get(f), bool)
+        and _finite_number(features.get(f))
+        and _usable_stat(p1[f])
+        and _usable_stat(p2[f])
     ]
-    z1 = {f: (features[f] - p1[f][0]) / max(p1[f][1], EPS) for f in usable}
-    z2 = {f: (features[f] - p2[f][0]) / max(p2[f][1], EPS) for f in usable}
+    x = {f: float(features[f]) for f in usable}
+    z1 = {f: (x[f] - float(p1[f][0])) / max(float(p1[f][1]), EPS) for f in usable}
+    if top1 == top2:
+        return {"why_top1": [], "toward_top2": [], "z": z1}
+    z2 = {f: (x[f] - float(p2[f][0])) / max(float(p2[f][1]), EPS) for f in usable}
     gap = {f: abs(z2[f]) - abs(z1[f]) for f in usable}  # 양수 = 1위 쪽이 더 가까움
-    why_top1 = [f for f in sorted(usable, key=lambda f: -gap[f]) if gap[f] > 0][:2]
-    toward_top2 = [f for f in sorted(usable, key=lambda f: gap[f]) if gap[f] < 0][:2]
+    why_top1 = [f for f in sorted(usable, key=lambda f: (-gap[f], f)) if gap[f] > GAP_TOL][:2]
+    toward_top2 = [f for f in sorted(usable, key=lambda f: (gap[f], f)) if gap[f] < -GAP_TOL][:2]
     return {
         "why_top1": why_top1,
         "toward_top2": toward_top2,
-        "z": {f: float(z1[f]) for f in usable},
+        "z": z1,
     }
 
 
