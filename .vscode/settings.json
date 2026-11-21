@@ -1,0 +1,19 @@
+{
+  // 저장소의 가상환경(.venv)을 기본 인터프리터로 쓴다. F5 실행과 테스트가 모두 이 환경을 쓴다.
+  // macOS/Linux는 "${workspaceFolder}/.venv/bin/python"으로 바꾸거나, 명령 팔레트의 "Python: Select Interpreter"에서 .venv를 고른다.
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+
+  // 테스트 창에서 pytest를 바로 실행한다(실제 모델 테스트는 기본으로 건너뜀).
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests"],
+
+  // Ruff 확장이 있으면 저장할 때 포매팅과 import 정렬을 한다(CI와 같은 설정: pyproject.toml).
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports.ruff": "explicit"
+    }
+  }
+}
