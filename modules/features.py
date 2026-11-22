@@ -1,8 +1,8 @@
 """C — 색·선 분석 (담당: 심현준).
 
 1일차 스텁: contracts/interfaces.md와 똑같은 모양의 가짜 결과를 돌려준다.
-preprocess_input()은 크기 맞추기만, is_grayscale()은 실제 판정을 하고,
-extract_features()·load_profiles()는 결정적인 가짜 값을 만든다.
+preprocess_input()은 사용자 입력의 종이 영역·화이트밸런스·크기를 처리하고,
+is_grayscale()은 실제 판정을 하며 extract_features()·load_profiles()는 결정적인 가짜 값을 만든다.
 predict_cv()는 plan.md 6.1의 z값 거리 → 확률 식을 그대로 쓴다.
 실제 구현(#16~#20)에서 함수 이름·입출력 형식은 그대로 두고 내용만 바꾼다.
 """
@@ -32,9 +32,62 @@ def _seed(*parts: bytes | str) -> int:
     return int.from_bytes(h.digest()[:8], "little")
 
 
+def _paper_bounds(img: np.ndarray) -> tuple[int, int, int, int] | None:
+    """밝고 저채도인 종이 후보의 신뢰도 높은 바운딩 박스를 찾는다."""
+    h, w = img.shape[:2]
+    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    mask = cv2.inRange(
+        hsv,
+        np.array([0, 0, 160], dtype=np.uint8),
+        np.array([180, 90, 255], dtype=np.uint8),
+    )
+    kernel_size = max(3, min(31, min(h, w) // 40 | 1))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    image_area = h * w
+    for contour in sorted(contours, key=cv2.contourArea, reverse=True):
+        x, y, box_w, box_h = cv2.boundingRect(contour)
+        box_area = box_w * box_h
+        if box_area < image_area * 0.3 or box_area > image_area * 0.98:
+            continue
+        if box_w < w * 0.5 or box_h < h * 0.5:
+            continue
+        if x < 2 or y < 2 or x + box_w > w - 2 or y + box_h > h - 2:
+            continue
+        if cv2.contourArea(contour) / box_area < 0.75:
+            continue
+
+        perimeter = cv2.arcLength(contour, True)
+        polygon = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
+        if 4 <= len(polygon) <= 8 and cv2.isContourConvex(polygon):
+            return x, y, box_w, box_h
+    return None
+
+
+def _white_balance_from_paper(img: np.ndarray) -> np.ndarray:
+    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    neutral = cv2.inRange(
+        hsv,
+        np.array([0, 0, 180], dtype=np.uint8),
+        np.array([180, 90, 255], dtype=np.uint8),
+    )
+    pixels = img[neutral > 0]
+    min_pixels = max(16, int(img.shape[0] * img.shape[1] * 0.001))
+    if pixels.shape[0] < min_pixels:
+        return img
+
+    channel_medians = np.median(pixels, axis=0).astype(np.float32)
+    if np.any(channel_medians <= 0):
+        return img
+    gains = np.clip(channel_medians.max() / channel_medians, 0.75, 1.35)
+    balanced = img.astype(np.float32) * gains
+    return np.clip(balanced, 0, 255).astype(np.uint8)
+
+
 def preprocess_input(img: np.ndarray) -> np.ndarray:
-    """사용자 입력 전용 전처리. RGB uint8, 긴 변 512px. (스텁: 크기 맞추기만, 종이 자르기·화이트밸런스는 #16)"""
-    # TODO(#16): 스텁 — #16 종이 영역 자르기·화이트밸런스 (담당 C)
+    """사용자 입력 전용 전처리. RGB uint8, 긴 변 512px."""
     img = np.asarray(img)
     if img.ndim == 2:
         img = np.stack([img] * 3, axis=-1)
@@ -43,6 +96,14 @@ def preprocess_input(img: np.ndarray) -> np.ndarray:
     if img.ndim != 3 or img.shape[2] != 3:
         raise ValueError("이미지는 RGB (H, W, 3) 형태여야 합니다.")
     img = np.ascontiguousarray(img.astype(np.uint8, copy=False))
+
+    paper_bounds = _paper_bounds(img)
+    if paper_bounds is not None:
+        x, y, w, h = paper_bounds
+        img = img[y : y + h, x : x + w]
+        if not is_grayscale(img):
+            img = _white_balance_from_paper(img)
+
     h, w = img.shape[:2]
     scale = LONG_SIDE / max(h, w)
     if scale != 1.0:
@@ -50,7 +111,7 @@ def preprocess_input(img: np.ndarray) -> np.ndarray:
         img = cv2.resize(
             img, (max(1, round(w * scale)), max(1, round(h * scale))), interpolation=interp
         )
-    return img
+    return np.ascontiguousarray(img)
 
 
 def is_grayscale(img: np.ndarray) -> bool:
