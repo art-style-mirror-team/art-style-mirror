@@ -63,12 +63,10 @@ def is_grayscale(img: np.ndarray) -> bool:
 
 
 def extract_features(img: np.ndarray, gray: bool = False) -> dict:
-    """색 6종(palette 포함)·선 5종 특징. 수치는 0~1, direction은 각도(0~180), palette는 [[r, g, b] × 5].
-    (스텁: 이미지 바이트로 만든 가짜 값)"""
+    """색 6종(palette 포함)·선 5종 특징. 수치 특징과 direction은 0~1이다."""
     # TODO(#17): 스텁 — #17 색 특징, #18 선 특징 실제 계산 (담당 C)
     rng = np.random.default_rng(_seed(np.asarray(img).tobytes(), str(gray)))
     feats = {f: float(rng.uniform(0.1, 0.9)) for f in NUMERIC_FEATURES}
-    feats["direction"] = float(rng.uniform(0, 180))
     if gray:
         feats["saturation"] = 0.0
         feats["color_diversity"] = 0.0
@@ -76,6 +74,88 @@ def extract_features(img: np.ndarray, gray: bool = False) -> dict:
     if gray:
         palette = np.repeat(palette[:, :1], 3, axis=1)
     feats["palette"] = palette.tolist()
+
+    x = np.asarray(img)
+    gray_img = cv2.cvtColor(x, cv2.COLOR_RGB2GRAY)
+    blurred = cv2.GaussianBlur(gray_img, (5, 5), sigmaX=1)
+    edges = cv2.Canny(blurred, 50, 150)
+    edge_count = int(cv2.countNonZero(edges))
+    pixel_count = int(edges.shape[0] * edges.shape[1])
+
+    if edge_count == 0 or pixel_count == 0:
+        feats.update(
+            edge_density=0.0,
+            direction=0.0,
+            straight_ratio=0.0,
+            roughness=0.0,
+            stroke_length=0.0,
+        )
+    else:
+        feats["edge_density"] = float(np.clip(edge_count / pixel_count, 0.0, 1.0))
+
+        gx = cv2.Sobel(blurred, cv2.CV_32F, 1, 0, ksize=3)
+        gy = cv2.Sobel(blurred, cv2.CV_32F, 0, 1, ksize=3)
+        edge_mask = edges > 0
+        edge_gx = gx[edge_mask]
+        edge_gy = gy[edge_mask]
+        magnitudes = np.hypot(edge_gx, edge_gy)
+        magnitude_sum = float(magnitudes.sum())
+        if magnitude_sum > 0.0:
+            tangent = np.mod(np.arctan2(edge_gy, edge_gx) + np.pi / 2, np.pi)
+            cos_mean = float(np.sum(magnitudes * np.cos(2 * tangent)) / magnitude_sum)
+            sin_mean = float(np.sum(magnitudes * np.sin(2 * tangent)) / magnitude_sum)
+            if np.hypot(cos_mean, sin_mean) > 1e-8:
+                angle = 0.5 * np.arctan2(sin_mean, cos_mean)
+                if angle < 0:
+                    angle += np.pi
+                feats["direction"] = float(np.clip(angle / np.pi, 0.0, 1.0))
+            else:
+                feats["direction"] = 0.0
+        else:
+            feats["direction"] = 0.0
+
+        long_side = max(edges.shape)
+        segments = cv2.HoughLinesP(
+            edges,
+            rho=1,
+            theta=np.pi / 180,
+            threshold=max(10, round(0.03 * long_side)),
+            minLineLength=max(10, round(0.05 * long_side)),
+            maxLineGap=max(2, round(0.01 * long_side)),
+        )
+        straight_mask = np.zeros_like(edges)
+        if segments is not None:
+            for segment in segments[:, 0]:
+                x1, y1, x2, y2 = (int(value) for value in segment)
+                cv2.line(straight_mask, (x1, y1), (x2, y2), 255, 1, cv2.LINE_8)
+        straight_count = int(cv2.countNonZero(cv2.bitwise_and(straight_mask, edges)))
+        feats["straight_ratio"] = float(np.clip(straight_count / edge_count, 0.0, 1.0))
+
+        skeleton = np.zeros_like(edges)
+        current = edges.copy()
+        kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+        while cv2.countNonZero(current) > 0:
+            eroded = cv2.erode(current, kernel)
+            opened = cv2.dilate(eroded, kernel)
+            residue = cv2.subtract(current, opened)
+            skeleton = cv2.bitwise_or(skeleton, residue)
+            current = eroded
+        component_count, _, stats, _ = cv2.connectedComponentsWithStats(skeleton, connectivity=8)
+        component_lengths = stats[1:component_count, cv2.CC_STAT_AREA]
+        component_lengths = component_lengths[component_lengths >= 3]
+        if component_lengths.size:
+            diagonal = float(np.hypot(*edges.shape))
+            feats["stroke_length"] = float(np.clip(component_lengths.mean() / diagonal, 0.0, 1.0))
+        else:
+            feats["stroke_length"] = 0.0
+
+        laplacian = cv2.Laplacian(blurred, cv2.CV_32F)
+        roughness_energy = float(np.mean(np.abs(laplacian))) / 255.0
+        feats["roughness"] = float(
+            np.clip(roughness_energy / (roughness_energy + 0.1), 0.0, 1.0)
+            if roughness_energy > 0.0
+            else 0.0
+        )
     return feats
 
 
