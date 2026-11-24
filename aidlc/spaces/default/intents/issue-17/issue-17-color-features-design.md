@@ -1,8 +1,8 @@
 # Issue #17 — 색 특징 6종 설계 제안
 
-- 상태: 구현·회귀 테스트 완료, 원격 CI 최종 검증 대기
+- 상태: 구현·회귀 테스트 완료, GitHub CI에서 pytest 통과
 - 담당: C (심현준)
-- 범위: `is_grayscale()` 및 `extract_features()`의 색 특징
+- 범위: `extract_features()`의 색 특징. `is_grayscale()`은 기존 1일차 구현을 그대로 사용한다.
 - 계약: `contracts/interfaces.md` 변경 없음
 - 제외: 선 특징 5종의 실제 계산은 Issue #18에서 구현
 
@@ -28,7 +28,8 @@
 
 ## 흑백 처리
 
-- `is_grayscale()`의 현재 기준인 픽셀별 RGB 최대값과 최소값 차이의 평균 `< 8.0`을 유지한다. 입력 채널 순서는 계약대로 RGB다.
+- `is_grayscale()`은 이번 이슈에서 새로 구현하거나 변경하지 않고, 1일차 main 코드의 기존 구현을 그대로 사용한다.
+- `app.py`는 `is_grayscale()` 결과를 `gray` 인자로 `extract_features(img, gray=gray)`에 전달한다. `extract_features()`는 이 인자를 사용해 흑백 입력의 색 특징과 팔레트를 처리한다.
 - `gray=True`일 때 `brightness`와 `contrast`는 흑백 휘도에서 계속 계산한다. 색 정보가 없다는 뜻으로 `saturation=0.0`, `color_diversity=0.0`, `warmth=0.5`(중립)로 반환한다.
 - `gray=True`의 `palette`도 동일한 5색 계약을 유지하며 각 색의 R, G, B가 같은 회색조로 만든다.
 - 흑백 이미지는 `predict_cv(gray=True)`에서 선 특징만 사용하므로, 반환되는 색 특징은 형식과 설명용으로 보존하고 순위에 반영하지 않는다.
@@ -44,13 +45,9 @@
 
 ## 진행 기록
 
-- 승인: 사용자 승인 후 제안한 측정 정의대로 `modules/features.py`의 색 특징을 구현했다. `is_grayscale()`의 기존 `< 8.0` 기준과 `extract_features()`의 계약은 유지했다.
+- 승인: 사용자 승인 후 제안한 측정 정의대로 `modules/features.py`의 색 특징을 구현했다. `is_grayscale()`은 기존 1일차 구현을 그대로 사용하고, `extract_features()`의 계약은 유지했다.
 - 선 특징 5종은 기존 결정적 스텁 값으로 두었고, 11개 반환 키와 `palette`의 5개 RGB 값 형식을 유지했다.
-- 변경 기록에는 구현과 회귀 테스트 추가를 포함한다. 로컬 pytest 실행은 Windows 애플리케이션 제어 정책으로 제한되었다.
 
 ## 테스트 보강 및 검증 기록 (2026-11-22)
 
-- `tests/test_smoke.py`에 밝고 어두운 RGB 이미지 쌍을 넣어 색 특징 6개가 모두 서로 다르고, brightness·contrast·saturation·warmth·color_diversity가 밝은 이미지에서 더 큰지 검사하는 회귀 테스트를 추가했다.
-- 통과: `ruff check .` — `All checks passed!`
-- 로컬 pytest는 Windows 애플리케이션 제어 정책이 numpy, pandas, cv2 등 외부 C 확장 모듈의 실행을 차단해 제한되었다.
-- 전체 pytest와 통합 테스트는 GitHub PR 생성 후 원격 CI 환경에서 최종 검증할 예정이다.
+- `tests/test_features.py`에 밝고 어두운 RGB 이미지 쌍을 넣어 색 특징 6개가 모두 서로 다르고, brightness·contrast·saturation·warmth·color_diversity가 밝은 이미지에서 더 큰지 검사하는 회귀 테스트를 추가했다.

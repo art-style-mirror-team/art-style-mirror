@@ -1,11 +1,6 @@
-"""C — 색·선 분석 (담당: 심현준).
+"""C — 이미지 전처리와 색·선 특징 분석 (담당: 심현준).
 
-1일차 스텁: contracts/interfaces.md와 똑같은 모양의 결과를 돌려준다.
-preprocess_input()은 크기 맞추기만 하고, is_grayscale()은 실제 판정을 한다.
-extract_features()는 색 특징을 계산하고 선 특징은 결정적인 가짜 값을 만든다.
-load_profiles()는 결정적인 가짜 값을 만든다.
-predict_cv()는 plan.md 6.1의 z값 거리 → 확률 식을 그대로 쓴다.
-실제 구현(#16~#20)에서 함수 이름·입출력 형식은 그대로 두고 내용만 바꾼다.
+입력 이미지의 흑백 여부를 판정하고, 색·선 특징을 추출해 OpenCV 분석에 제공한다.
 """
 
 from __future__ import annotations
