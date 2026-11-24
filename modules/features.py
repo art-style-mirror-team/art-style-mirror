@@ -66,22 +66,19 @@ def _paper_bounds(img: np.ndarray) -> tuple[int, int, int, int] | None:
     return None
 
 
-def _white_balance_from_paper(img: np.ndarray) -> np.ndarray:
+def _white_balance_from_candidates(img: np.ndarray) -> np.ndarray:
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-    neutral = cv2.inRange(
-        hsv,
-        np.array([0, 0, 180], dtype=np.uint8),
-        np.array([180, 90, 255], dtype=np.uint8),
-    )
-    pixels = img[neutral > 0]
-    min_pixels = max(16, int(img.shape[0] * img.shape[1] * 0.001))
-    if pixels.shape[0] < min_pixels:
+    saturation = hsv[:, :, 1]
+    value = hsv[:, :, 2]
+    candidates = (value >= np.percentile(value, 60)) & (saturation <= 115)
+    if candidates.mean() < 0.2:
         return img
 
+    pixels = img[candidates]
     channel_medians = np.median(pixels, axis=0).astype(np.float32)
     if np.any(channel_medians <= 0):
         return img
-    gains = np.clip(channel_medians.max() / channel_medians, 0.75, 1.35)
+    gains = np.clip(channel_medians.max() / channel_medians, 0.75, 1.8)
     balanced = img.astype(np.float32) * gains
     return np.clip(balanced, 0, 255).astype(np.uint8)
 
@@ -101,8 +98,7 @@ def preprocess_input(img: np.ndarray) -> np.ndarray:
     if paper_bounds is not None:
         x, y, w, h = paper_bounds
         img = img[y : y + h, x : x + w]
-        if not is_grayscale(img):
-            img = _white_balance_from_paper(img)
+    img = _white_balance_from_candidates(img)
 
     h, w = img.shape[:2]
     scale = LONG_SIDE / max(h, w)
