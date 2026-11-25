@@ -20,6 +20,33 @@ def _geometric_image(size: int = 256) -> np.ndarray:
     return image
 
 
+def _parallel_line_image(angle_degrees: float = 0, size: int = 256) -> np.ndarray:
+    image = np.zeros((size, size, 3), dtype=np.uint8)
+    angle = np.deg2rad(angle_degrees)
+    direction = np.array([np.cos(angle), np.sin(angle)])
+    normal = np.array([-direction[1], direction[0]])
+    center = np.array([(size - 1) / 2, (size - 1) / 2])
+    for offset in range(-size // 2, size // 2 + 1, 24):
+        start = np.rint(center + offset * normal - size * direction).astype(int)
+        end = np.rint(center + offset * normal + size * direction).astype(int)
+        cv2.line(image, tuple(start), tuple(end), (255, 255, 255), 2)
+    return image
+
+
+def _multi_direction_segments_image(size: int = 256) -> np.ndarray:
+    image = np.zeros((size, size, 3), dtype=np.uint8)
+    angles = (0, 45, 90, 135)
+    length = 20
+    for row, y in enumerate(range(24, size - 16, 32)):
+        for col, x in enumerate(range(24, size - 16, 32)):
+            angle = np.deg2rad(angles[(row + col) % len(angles)])
+            delta = np.array([np.cos(angle), np.sin(angle)]) * (length / 2)
+            start = np.rint([x, y] - delta).astype(int)
+            end = np.rint([x, y] + delta).astype(int)
+            cv2.line(image, tuple(start), tuple(end), (255, 255, 255), 2)
+    return image
+
+
 def _curved_stroke_image(size: int = 256) -> np.ndarray:
     image = np.zeros((size, size, 3), dtype=np.uint8)
     for y in range(20, size - 20, 32):
@@ -35,6 +62,26 @@ def test_line_features_are_floats_in_unit_interval():
     for name in LINE_FEATURES:
         assert type(result[name]) is float
         assert 0.0 <= result[name] <= 1.0
+
+
+def test_direction_is_high_for_parallel_lines():
+    result = features.extract_features(_parallel_line_image())
+
+    assert result["direction"] >= 0.8
+
+
+def test_direction_is_lower_for_lines_in_multiple_directions():
+    parallel = features.extract_features(_parallel_line_image())
+    varied = features.extract_features(_multi_direction_segments_image())
+
+    assert varied["direction"] < parallel["direction"] - 0.3
+
+
+def test_direction_is_continuous_across_horizontal_angle_boundary():
+    positive = features.extract_features(_parallel_line_image(angle_degrees=3))
+    negative = features.extract_features(_parallel_line_image(angle_degrees=-3))
+
+    assert abs(positive["direction"] - negative["direction"]) < 0.05
 
 
 def test_straight_ratio_separates_geometric_lines_from_curved_strokes():
