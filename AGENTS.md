@@ -35,6 +35,7 @@ CLIP(소재·분위기·양식)과 OpenCV(색·선) 두 관점의 확률을 합�
 - 커밋 메시지: `feat: ...`, `fix: ...`, `docs: ...`, `test: ...`, `chore: ...`
 - PR: 본문에 `Closes #<이슈번호>`, 리뷰어 1명, 파일 1~3개·변경 300줄 이내
 - 작업 시작 전 `git fetch origin` 후 `git merge origin/main`
+- 작업을 시작하기 전에 `docs/notes/<자기 역할>.md`(A·B·C·D, 없으면 건너뜀)를 읽는다. 다른 역할과 맞춘 결정, 내 작업에 영향을 주는 변경, 열린 문제가 날짜와 출처(PR·이슈 번호)와 함께 적혀 있다. 노트가 이 파일·`contracts/interfaces.md`·`docs/plan.md`와 다르면 그쪽을 따른다. 노트는 D가 결정이나 리뷰가 있을 때 갱신하고, 각자 추가할 내용은 PR로 올린다.
 - 변경 후 `pytest`가 통과해야 한다. `tests/test_smoke.py`는 인터페이스 형식을 검사하므로 실제 구현으로 바꿔도 그대로 통과해야 한다.
 - 실제 모델(CLIP 등)을 내려받거나 불러오는 테스트는 `@pytest.mark.model`로 표시한다. 기본 `pytest`와 CI는 이를 건너뛰고 모델 함수를 `tests/fakes.py`의 가짜로 바꿔 끼운다. 실제 모델까지 돌리려면 `pytest --run-model`. 그래서 다른 모듈은 모델 함수를 `data.embed_image(...)`처럼 모듈을 통해 부른다(`from modules.data import embed_image` 금지). 모델 함수를 새로 만들면 `tests/fakes.py`의 `FAKES`에 가짜를 추가한다.
 - 커밋 전에 `ruff format .`과 `ruff check --fix .`를 실행한다. 설정은 `pyproject.toml`(line-length 100). CI가 같은 검사를 하며 실패하면 머지하지 않는다. 규칙을 끄거나 `# noqa`로 피하려면 PR에 이유를 적는다.
