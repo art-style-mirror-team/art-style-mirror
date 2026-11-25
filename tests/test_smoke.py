@@ -113,6 +113,14 @@ def test_similar_works_excludes_itself():
 # --- C: features ---------------------------------------------------------
 
 
+def test_preprocess_and_grayscale(color_img, sketch_img):
+    out = features.preprocess_input(color_img)
+    assert out.dtype == np.uint8 and out.ndim == 3 and out.shape[2] == 3
+    assert max(out.shape[:2]) == 512
+    assert not features.is_grayscale(out)
+    assert features.is_grayscale(features.preprocess_input(sketch_img))
+
+
 @pytest.mark.parametrize("gray", [False, True])
 def test_features_and_predict_cv(color_img, gray):
     feats = features.extract_features(features.preprocess_input(color_img), gray=gray)

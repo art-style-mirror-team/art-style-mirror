@@ -1,0 +1,45 @@
+# A 데이터·CLIP — 작업 노트
+
+- 담당: 홍승민 · `modules/data.py`, `scripts/build_index.py`
+- 기준: main `910670a`, 2026-11-25
+- 이 노트는 다른 역할과 맞춘 결정과 A 작업에 영향을 주는 변경을 모은 것이다. 규칙은 `AGENTS.md`, 함수 형식은 `contracts/interfaces.md`, 일정은 `docs/plan.md`가 기준이며, 이 노트와 다르면 그쪽을 따른다.
+
+## 지금 상태
+
+- A 이슈 #3~#7은 모두 열려 있고, 아직 A의 브랜치·PR이 없다.
+- `modules/data.py`는 1일차 스텁이다(`TODO(#3)`~`TODO(#7)`). B·C는 이 스텁의 가짜 색인으로 작업하고 있다.
+- 주고받는 날(`docs/plan.md` 7.1): 3일차 A → C `meta.csv`(split, path), 4일차 A → B `embeddings.npy`와 `embed_image()`.
+
+## 우선순위: #3 분할이 C를 막고 있다
+
+- C는 실제 명화로 기준값을 정해야 하는 작업이 있다. PR #42의 화이트밸런스 판정 기준값, PR #44의 직선 비율 확인이다.
+- `AGENTS.md` 규칙 6에 따라 기준값은 검증셋으로만 정한다. 검증셋은 #3의 분할(`meta.csv`의 `split` 열)이 있어야 생긴다.
+- 분할 전에 C가 고른 작품이 나중에 테스트셋에 들어가면 #26 최종 평가가 오염된다. 지금 C에게는 쓴 작품 이름을 기록하도록 요청해 두었다.
+- 그래서 #3을 가장 먼저 한다. 전체가 늦어지면 테스트셋에 들어갈 작품 목록부터 확정해 공유한다.
+- 분할은 화가별로 고르게, 시드를 고정한다(70/15/15).
+
+## 다른 역할의 변경 중 A에 영향을 주는 것
+
+- **명화에는 `features.preprocess_input()`을 쓰지 않는다** (`AGENTS.md` 규칙 9, `contracts/interfaces.md` 공통 규칙). PR #42 이후 이 함수는 종이 자르기와 화이트밸런스까지 한다. `build_index.py`(#4)에서 명화는 RGB로 바꾸고 크기만 맞춘다. 화이트밸런스를 하면 화가 고유의 색이 지워진다.
+- **`direction` 특징의 정의가 바뀌었다** (PR #44 리뷰, C·D 합의). 평균 각도(0~180)가 아니라 방향 일관성(0~1)이며, 이미지를 회전해도 값이 같다. #27 변형 안정성 측정에서 회전 변형의 OpenCV 쪽 결과를 해석할 때 감안한다.
+
+## 해야 할 설정
+
+- 이슈 #1 확인: `pytest -q`(main `910670a` 기준 30 passed, 2 skipped)와 `python app.py` 실행 결과를 이슈 #1에 댓글로 남긴다.
+- `README.md` 팀원 표의 A 줄에 GitHub 아이디를 채우는 PR을 올린다.
+- AI-DLC: `aidlc config --pin 2.11.4`, `aidlc doctor` (`docs/aidlc-guide.md`).
+
+## 리뷰
+
+- A의 PR(`data.py`, `build_index.py`)은 B(@dpdnjsh)가 리뷰한다(`.github/CODEOWNERS`).
+- A는 B의 PR(`classify.py`, `notebooks/`)을 리뷰한다. CODEOWNERS에 A 아이디가 아직 없어 지금은 D가 대신 지정된다. D가 아이디를 넣는 PR을 올릴 예정이다.
+
+## 다른 PR 리뷰에서 반복된 지적 (같은 실수를 하지 않는다)
+
+- 브랜치는 최신 main에서 만들고, 충돌은 `git merge origin/main`으로 푼다. rebase는 하지 않는다.
+- `tests/test_smoke.py`는 계약 검사라 지우거나 옮기거나 약하게 고치지 않는다. 동작 테스트는 `tests/test_data.py` 같은 별도 파일에 둔다.
+- 테스트를 통과시키려고 테스트 입력을 바꾸지 않는다. 실패하면 코드를 고친다.
+- 로컬에서 `pytest`를 돌린다. 못 돌리면 CI 결과를 확인한 뒤 리뷰를 요청한다.
+- PR 본문에 AI 출력 흔적(`[cite: …]` 등)이나 코드와 다른 설명을 남기지 않는다. "AI 판단 이유"는 실제 코드 동작과 일치해야 한다.
+- 모델 함수는 다른 모듈에서 `data.embed_image(...)`처럼 모듈을 통해 부른다. 모델 함수를 새로 만들면 `tests/fakes.py`의 `FAKES`에 가짜를 추가한다(`AGENTS.md` 작업 방식).
+- `pytest --run-model`로 확인한 #5 결과(같은 이미지 두 번 → 유사도 0.99 이상)는 실제 수치를 PR에 적는다.
