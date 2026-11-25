@@ -22,7 +22,8 @@ def test_preprocess_and_grayscale():
 def test_preprocess_crops_paper_and_neutralizes_white_balance():
     img = np.full((240, 320, 3), [25, 35, 45], dtype=np.uint8)
     img[30:210, 50:270] = [230, 210, 190]
-    img[70:170, 90:230] = [120, 45, 20]
+    img[85:90, 90:230] = [120, 45, 20]
+    img[130:135, 90:230] = [120, 45, 20]
     original = img.copy()
 
     out = features.preprocess_input(img)
@@ -42,6 +43,18 @@ def test_preprocess_without_paper_keeps_image_bounds():
 
     assert out.shape == (384, 512, 3)
     assert np.array_equal(out[0, 0], [100, 10, 120])
+
+
+@pytest.mark.parametrize(
+    "color", [[100, 110, 120], [150, 165, 184], [239, 224, 169], [234, 200, 184]]
+)
+def test_preprocess_preserves_uniform_nonpaper_colors(color):
+    img = np.full((300, 400, 3), color, dtype=np.uint8)
+
+    out = features.preprocess_input(img)
+
+    assert np.array_equal(out, np.full_like(out, color))
+    assert not features.is_grayscale(out)
 
 
 def test_preprocess_preserves_grayscale_after_paper_crop():
@@ -74,3 +87,25 @@ def test_preprocess_does_not_change_saturated_non_paper_art(color):
     out = features.preprocess_input(img)
 
     assert np.array_equal(out, np.full_like(out, color))
+
+
+def test_color_features_differ_between_bright_and_dark_images():
+    bright = np.empty((40, 40, 3), dtype=np.uint8)
+    bright[:20, :20] = [255, 200, 50]
+    bright[:20, 20:] = [255, 100, 30]
+    bright[20:, :20] = [220, 80, 40]
+    bright[20:, 20:] = [255, 230, 100]
+
+    dark = np.full((40, 40, 3), [20, 22, 24], dtype=np.uint8)
+    dark[:4, :4] = [30, 32, 34]
+
+    bright_features = features.extract_features(bright)
+    dark_features = features.extract_features(dark)
+    color_keys = ("brightness", "contrast", "saturation", "warmth", "color_diversity", "palette")
+
+    assert all(bright_features[key] != dark_features[key] for key in color_keys)
+    assert bright_features["brightness"] > dark_features["brightness"]
+    assert bright_features["contrast"] > dark_features["contrast"]
+    assert bright_features["saturation"] > dark_features["saturation"]
+    assert bright_features["warmth"] > dark_features["warmth"]
+    assert bright_features["color_diversity"] > dark_features["color_diversity"]
