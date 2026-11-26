@@ -54,7 +54,7 @@ ruff check --fix .
 | 역할 | 이름 | GitHub | 맡는 일 |
 | --- | --- | --- | --- |
 | A — 데이터·CLIP | 홍승민 | | 데이터 분할, CLIP 임베딩, 키워드 설명 |
-| B — 판정·융합 | 홍예원 | [@dpdnjsh] | 입력 유형 판별, 판정 비교, 온도 보정, 두 관점 합치기 |
+| B — 판정·융합 | 홍예원 | [@dpdnjsh](https://github.com/dpdnjsh) | 입력 유형 판별, 판정 비교, 온도 보정, 두 관점 합치기 |
 | C — 색·선 분석 | 심현준 | | 입력 전처리, 색·선 특징, 화가 프로필 |
 | D — 신뢰도·UI·통합 | 김현승 | [@KimHyeonSeung1213](https://github.com/KimHyeonSeung1213) | 신뢰 등급, 설명·레이더 차트, Gradio 화면, 통합 |
 
