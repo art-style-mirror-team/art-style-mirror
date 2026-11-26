@@ -93,17 +93,21 @@ def detect_type(img_emb: np.ndarray) -> str:
     `data.embed_text`를 가짜로 바꿔 끼워도 그대로 반영된다. 모델 함수는 반드시
     모듈 경유(`data.embed_text`)로 부른다.
     """
+    types = list(TYPE_PROMPTS)  # dict는 삽입 순서 보존 → 결정적
+    prototypes = np.stack(
+        [
+            _l2_normalize(np.asarray(data.embed_text(TYPE_PROMPTS[t]), dtype=np.float32).mean(0))
+            for t in types
+        ]
+    )
     # 입력은 list 등으로 와도 받는다. 방향만 보므로 L2 정규화해 크기에 불변이게 한다.
-    v = _l2_normalize(img_emb)
-
-    best_type, best_sim = None, -np.inf
-    for type_name, prompts in TYPE_PROMPTS.items():  # dict는 삽입 순서 보존 → 결정적
-        text_emb = np.asarray(data.embed_text(prompts), dtype=np.float32)
-        prototype = _l2_normalize(text_emb.mean(axis=0))
-        sim = float(prototype @ v)
-        if sim > best_sim:  # 동률이면 앞의 유형 유지 → 같은 입력에 같은 결과
-            best_sim, best_type = sim, type_name
-    return best_type
+    # NaN·inf가 섞인 입력은 계산 중 경고 대신 NaN 점수가 되게 한다(아래에서 처리).
+    with np.errstate(invalid="ignore"):
+        sims = prototypes @ _l2_normalize(img_emb)
+    # NaN(입력에 NaN·inf가 섞인 경우)은 가장 낮은 점수로 보고, 모두 NaN이어도 세 값 중 하나를
+    # 돌려준다(계약). argmax는 동률이면 앞의 유형을 고르므로 같은 입력에 같은 결과가 나온다.
+    sims = np.nan_to_num(sims, nan=-np.inf)
+    return types[int(np.argmax(sims))]
 
 
 def predict_clip(emb: np.ndarray) -> dict:

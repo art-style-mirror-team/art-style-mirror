@@ -68,6 +68,15 @@ def test_detect_type_scale_invariant():
     assert classify.detect_type(emb) == classify.detect_type(emb * 3.0)
 
 
+def test_detect_type_nan_input_returns_valid_literal():
+    # NaN·inf가 섞인 입력이어도 None이 아니라 세 리터럴 중 하나를 돌려준다(계약).
+    emb = np.full(512, np.nan, dtype=np.float32)
+    assert classify.detect_type(emb) in TYPES
+    emb = _sample_emb().copy()
+    emb[0] = np.inf
+    assert classify.detect_type(emb) in TYPES
+
+
 # --- #13 similar_works() ---------------------------------------------------
 
 
