@@ -119,3 +119,108 @@ def fuse(p_clip: dict, p_cv: dict) -> list[tuple]:
     fused = {a: w * p_clip.get(a, 0.0) + (1 - w) * p_cv.get(a, 0.0) for a in names}
     total = sum(fused.values()) or 1.0
     return sorted(((a, p / total) for a, p in fused.items()), key=lambda x: -x[1])[:3]
+
+
+def _knn_logits(E: np.ndarray, k: int, by: str, eps: float = 1e-3) -> tuple[list[str], np.ndarray]:
+    """kNN 가중 투표 로짓. (#9)
+
+    학습셋(`split == "train"`) 이웃만으로, 질의 `E`와 색인 임베딩의 코사인 유사도 상위 `k`개를
+    고른 뒤 `max(유사도, 0)`으로 clip해 `by`("artist"|"style") 이름별로 더한 가중 투표를 구하고,
+    `z = log(투표 + eps)`를 돌려준다.
+
+    Args:
+        E: `(n, 512)` 질의 임베딩 여러 장.
+        k: 이웃 수. 학습셋 크기보다 크면 학습셋 크기로 제한한다.
+        by: "artist" 또는 "style". 색인 메타의 해당 열로 투표한다.
+        eps: 투표 합에 더하는 바닥값(키워드 인자, 기본 1e-3). 투표가 0인 이름은 `log(eps)`가 되어
+            모든 z 원소가 유한하다(NaN·-inf 없음).
+
+    Returns:
+        `(names, z)`. `names`는 학습셋에서 읽어 정렬한 이름 목록, `z`는 `(n, len(names))` 로짓.
+
+    Raises:
+        ValueError: `k <= 0`이거나 학습셋이 비어 있을 때(둘 다 `n`과 무관하게 먼저 검사한다).
+
+    이름 순위 동점은 이름순(FR1.6), 이웃 선택 동점은 색인 행 위치가 앞선 쪽을 먼저(FR1.8,
+    안정 정렬)로 끊어 결과가 결정적이다. 색인 메타는 위치 기준으로만 읽는다(라벨 인덱스 가정 금지).
+    """
+    index = load_index()
+    emb, meta = index["emb"], index["meta"]
+    # 메타는 emb와 행 위치만 일치한다. 라벨 인덱스로 읽지 않고 열을 위치 순 numpy 배열로 뽑는다.
+    split = meta["split"].to_numpy()
+    by_values = meta[by].to_numpy()
+    train_mask = split == "train"
+
+    # FR1.9: k·학습셋 검사를 n 처리보다 먼저 한다(학습셋이 비면 n과 무관하게 ValueError).
+    if k <= 0 or not train_mask.any():
+        raise ValueError("k는 1 이상이어야 하고 학습셋(split=='train')이 비어 있으면 안 됩니다.")
+
+    names = sorted(np.unique(by_values[train_mask]).tolist())
+    name_to_col = {name: col for col, name in enumerate(names)}
+
+    k = min(k, int(train_mask.sum()))  # FR1.9: 학습셋 크기로 제한
+
+    n = int(np.asarray(E).shape[0])
+    if n == 0:  # FR1.9: 입력 0장이면 (names, (0, 이름 수)) 빈 z
+        return names, np.empty((0, len(names)), dtype=np.float64)
+
+    train_emb = _l2_normalize(emb[train_mask])  # (m, 512), 행 순서 = 원래 색인 위치 순서
+    train_cols = np.array([name_to_col[v] for v in by_values[train_mask]])
+    sims = _l2_normalize(E) @ train_emb.T  # (n, m) 코사인 유사도
+
+    # 유사도 내림차순 + 동점은 위치 앞선 이웃 먼저(안정 정렬) → 상위 k개
+    order = np.argsort(-sims, axis=1, kind="stable")[:, :k]
+    votes = np.zeros((n, len(names)), dtype=np.float64)
+    for i in range(n):
+        neigh = order[i]
+        np.add.at(votes[i], train_cols[neigh], np.maximum(sims[i, neigh], 0.0))
+    return names, np.log(votes + eps)
+
+
+def _topk_accuracy(
+    z: np.ndarray,
+    names: list[str],
+    labels: list[str],
+    ks: tuple[int, ...] = (1, 3),
+) -> dict[int, float]:
+    """Top-k 정확도. (#9, #10·#11 재사용)
+
+    각 입력에 대해 `z`가 큰 상위 `k`개 이름 안에 정답 이름(`labels[i]`)이 있으면 맞힌 것으로 센다.
+    `_knn_logits`의 반환 형식(`names`, `z`)에만 의존하므로 `by`나 특정 이름 집합에 묶이지 않는다.
+
+    Args:
+        z: `(n, len(names))` 로짓 행렬.
+        names: `z`의 열에 대응하는 이름 목록.
+        labels: 각 행의 정답 이름 리스트(길이 n). `names`에 없는 이름은 오답으로 센다(FR2.4).
+        ks: 평가할 k 값들. 이름 수보다 크면 이름 수로 제한해 계산한다(FR2.4).
+
+    Returns:
+        `{k: 정확도}` 딕셔너리. 키는 원래 `ks` 값을 그대로 쓴다.
+
+    Raises:
+        ValueError: `z` 행 수와 `labels` 길이가 다르거나 `ks`에 0 이하 값이 있을 때(FR2.5).
+
+    상위 선택의 동점은 이름순(열 위치 오름차순, FR1.6)으로 끊어 결정적이다.
+    """
+    z = np.asarray(z, dtype=np.float64)
+    n = z.shape[0]
+    if n != len(labels):
+        raise ValueError("z의 행 수와 labels 길이가 같아야 합니다.")
+    if any(k <= 0 for k in ks):
+        raise ValueError("ks의 모든 원소는 1 이상이어야 합니다.")
+
+    num = len(names)
+    name_to_col = {name: col for col, name in enumerate(names)}
+    # 유사도 큰 순, 동점은 이름순(열 위치 오름차순) → 안정 정렬
+    order = np.argsort(-z, axis=1, kind="stable")
+    result: dict[int, float] = {}
+    for k in ks:
+        kk = min(k, num)  # FR2.4: 이름 수로 제한
+        topk = order[:, :kk]
+        hits = 0
+        for i in range(n):
+            col = name_to_col.get(labels[i])  # FR2.4: 미지 이름이면 None → 오답
+            if col is not None and col in topk[i]:
+                hits += 1
+        result[k] = hits / n if n > 0 else 0.0
+    return result
