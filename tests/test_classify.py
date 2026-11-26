@@ -136,3 +136,181 @@ def test_similar_works_reads_by_position_not_label(monkeypatch):
     assert [w["id"] for w in works] == ["P0"]  # 코사인 0.9가 1위(행 위치 0)
     assert works[0]["artist"] == "artist-P0"
     assert works[0]["path"] == "data/P0.jpg"
+
+
+# --- #9 kNN 투표 방식 판정 (_knn_logits·_topk_accuracy) ------------------------------
+#
+# 작은 가짜 색인을 classify.load_index에 monkeypatch해 동작을 검증한다. 모델 다운로드가 없으므로
+# @pytest.mark.model은 쓰지 않는다. 임베딩은 추론을 쉽게 하려고 2차원 벡터를 쓴다(_l2_normalize는
+# 차원에 무관하므로 정상 동작한다).
+
+
+def _knn_index(
+    emb_rows: list[list[float]], artists: list[str], styles: list[str], splits: list[str]
+) -> dict:
+    """#9용 작은 가짜 색인. meta는 계약의 6개 열을 모두 가지고 attrs["fake"]=True."""
+    emb = np.array(emb_rows, dtype=np.float32)
+    n = len(emb_rows)
+    meta = pd.DataFrame(
+        {
+            "id": [f"w{i}" for i in range(n)],
+            "artist": artists,
+            "style": styles,
+            "genre": ["landscape"] * n,
+            "path": [f"data/w{i}.jpg" for i in range(n)],
+            "split": splits,
+        }
+    )
+    meta.attrs["fake"] = True
+    return {"emb": emb, "meta": meta}
+
+
+# FR1.1/FR1.5/FR1.7 — 반환 형식 (이름 목록, (n, 이름 수) z), 이름은 색인에서 읽혀 정렬됨
+def test_knn_logits_return_shape_and_sorted_names(monkeypatch):
+    idx = _knn_index(
+        [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        ["Bob", "Ann", "Bob"],
+        ["s1", "s0", "s1"],
+        ["train", "train", "train"],
+    )
+    monkeypatch.setattr(classify, "load_index", lambda: idx)
+    E = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+
+    names, z = classify._knn_logits(E, k=2, by="artist")
+    assert names == ["Ann", "Bob"]  # 색인에서 읽어 정렬(개수 고정 아님)
+    assert z.shape == (2, 2)
+    assert np.all(np.isfinite(z))
+
+
+# FR1.2 — 이웃은 학습셋에서만 찾는다(val/test 행은 투표에 포함되지 않고 이름 목록에도 없다)
+def test_knn_logits_uses_train_only(monkeypatch):
+    idx = _knn_index(
+        [[0.6, 0.8], [1.0, 0.0], [1.0, 0.0]],
+        ["Ann", "Zed", "Zed"],
+        ["s0", "s1", "s1"],
+        ["train", "val", "test"],
+    )
+    monkeypatch.setattr(classify, "load_index", lambda: idx)
+
+    names, z = classify._knn_logits(np.array([[1.0, 0.0]], np.float32), k=1, by="artist")
+    assert names == ["Ann"]  # Zed는 train이 아니므로 이름 목록에 없다
+    assert z.shape == (1, 1)
+    assert z[0, 0] == pytest.approx(np.log(0.6 + 1e-3), abs=1e-6)  # Ann 투표 = 코사인 0.6
+
+
+# FR1.3/FR1.4 — 유사도 큰 이웃이 많은 이름의 z가 더 크다(가중 투표 합산)
+def test_knn_logits_weighted_vote_accumulates(monkeypatch):
+    idx = _knn_index(
+        [[1.0, 0.0], [0.8, 0.6], [0.1, float(np.sqrt(0.99))]],
+        ["Ann", "Ann", "Bob"],
+        ["s0", "s0", "s1"],
+        ["train", "train", "train"],
+    )
+    monkeypatch.setattr(classify, "load_index", lambda: idx)
+
+    names, z = classify._knn_logits(np.array([[1.0, 0.0]], np.float32), k=3, by="artist")
+    assert z[0, names.index("Ann")] > z[0, names.index("Bob")]
+    assert z[0, names.index("Ann")] == pytest.approx(np.log(1.0 + 0.8 + 1e-3), abs=1e-6)
+
+
+# FR1.4/FR1.5/NFR5 — 음수 유사도 clip → 모든 z 유한, 투표 0인 이름은 log(eps), eps 키워드 동작
+def test_knn_logits_clip_negative_and_eps_floor(monkeypatch):
+    idx = _knn_index(
+        [[1.0, 0.0], [0.0, 1.0]],
+        ["Ann", "Bob"],
+        ["s0", "s1"],
+        ["train", "train"],
+    )
+    monkeypatch.setattr(classify, "load_index", lambda: idx)
+
+    # 질의는 Ann과 코사인 1, Bob과 코사인 0 → Bob 투표 0 → log(기본 eps 1e-3)
+    names, z = classify._knn_logits(np.array([[1.0, 0.0]], np.float32), k=2, by="artist")
+    assert np.all(np.isfinite(z))
+    assert z[0, names.index("Bob")] == pytest.approx(np.log(1e-3), abs=1e-6)
+
+    # 모든 이웃과 음의 코사인 → 전부 clip 0 → 모든 z = log(eps), eps 키워드가 먹힌다
+    _, z_neg = classify._knn_logits(np.array([[-1.0, -1.0]], np.float32), k=2, by="artist", eps=0.5)
+    assert np.allclose(z_neg, np.log(0.5))
+
+
+# FR1.8/NFR1 — 이웃 선택 동점은 색인 행 위치가 앞선 쪽을 먼저(안정 정렬)
+def test_knn_logits_neighbor_tie_broken_by_position(monkeypatch):
+    idx = _knn_index(
+        [[1.0, 0.0], [1.0, 0.0]],  # 두 이웃 모두 코사인 1.0으로 동점
+        ["Ann", "Bob"],
+        ["s0", "s1"],
+        ["train", "train"],
+    )
+    monkeypatch.setattr(classify, "load_index", lambda: idx)
+
+    names, z = classify._knn_logits(np.array([[1.0, 0.0]], np.float32), k=1, by="artist")
+    assert z[0, names.index("Ann")] == pytest.approx(np.log(1.0 + 1e-3), abs=1e-6)  # 앞선 Ann
+    assert z[0, names.index("Bob")] == pytest.approx(np.log(1e-3), abs=1e-6)  # Bob 투표 없음
+
+
+# FR1.9 — 엣지 순서: k<=0 → ValueError, k 초과 → clamp, n==0 → (names, (0, 이름 수))
+def test_knn_logits_edge_order(monkeypatch):
+    idx = _knn_index(
+        [[1.0, 0.0], [0.0, 1.0]],
+        ["Ann", "Bob"],
+        ["s0", "s1"],
+        ["train", "train"],
+    )
+    monkeypatch.setattr(classify, "load_index", lambda: idx)
+
+    with pytest.raises(ValueError):
+        classify._knn_logits(np.array([[1.0, 0.0]], np.float32), k=0, by="artist")
+
+    _, z = classify._knn_logits(np.array([[1.0, 0.0]], np.float32), k=99, by="artist")
+    assert z.shape == (1, 2)  # k가 학습셋 크기 초과 → clamp, 오류 없음
+
+    names0, z0 = classify._knn_logits(np.empty((0, 2), np.float32), k=1, by="artist")
+    assert names0 == ["Ann", "Bob"]
+    assert z0.shape == (0, 2)  # n==0 → 빈 z
+
+
+# FR1.9 — 학습셋이 비면 n과 무관하게 ValueError(학습셋·k 검사를 n 처리보다 먼저)
+def test_knn_logits_empty_train_raises_regardless_of_n(monkeypatch):
+    idx = _knn_index(
+        [[1.0, 0.0], [0.0, 1.0]],
+        ["Ann", "Bob"],
+        ["s0", "s1"],
+        ["val", "test"],  # train 없음
+    )
+    monkeypatch.setattr(classify, "load_index", lambda: idx)
+
+    with pytest.raises(ValueError):
+        classify._knn_logits(np.array([[1.0, 0.0]], np.float32), k=1, by="artist")
+    with pytest.raises(ValueError):  # 입력 0장이어도 학습셋이 비면 ValueError
+        classify._knn_logits(np.empty((0, 2), np.float32), k=1, by="artist")
+
+
+# FR2.2/FR2.4 — dict {k: 정확도} 반환, 상위 선택 동점은 이름순, 미지 label은 오답
+def test_topk_accuracy_counts_name_order_tie_and_unknown_label():
+    names = ["Ann", "Bob", "Cindy"]
+    z = np.array(
+        [
+            [2.0, 1.0, 0.0],  # 최고 Ann
+            [0.0, 1.0, 1.0],  # Bob·Cindy 동점 최고 → 이름순으로 Bob이 Top-1
+            [0.0, 0.0, 2.0],  # 최고 Cindy
+        ]
+    )
+    labels = ["Ann", "Bob", "Zed"]  # Zed는 names에 없음 → 오답(오류 아님)
+    acc = classify._topk_accuracy(z, names, labels, ks=(1,))
+    assert acc == {1: pytest.approx(2 / 3)}  # Ann·Bob 정답, Zed 오답
+
+
+# FR2.4/FR2.5 — ks 초과 clamp, 행 수≠labels·ks<=0 → ValueError
+def test_topk_accuracy_clamp_and_value_errors():
+    names = ["Ann", "Bob"]
+    z = np.array([[2.0, 1.0], [1.0, 2.0]])
+    labels = ["Ann", "Bob"]
+
+    acc = classify._topk_accuracy(z, names, labels, ks=(1, 5))
+    assert acc[1] == pytest.approx(1.0)
+    assert acc[5] == pytest.approx(1.0)  # ks=5 → 이름 수 2로 clamp, 키는 5 유지
+
+    with pytest.raises(ValueError):  # 행 수 != labels 길이
+        classify._topk_accuracy(z, names, ["Ann"], ks=(1,))
+    with pytest.raises(ValueError):  # ks<=0
+        classify._topk_accuracy(z, names, labels, ks=(0,))
