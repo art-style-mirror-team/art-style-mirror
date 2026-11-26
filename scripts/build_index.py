@@ -1,4 +1,4 @@
-"""WikiArt 축소판 → 화가 24명 선별 → 70/15/15 분할 → CLIP 임베딩 사전 계산.
+"""WikiArt 축소판 → 화가 23명 선별 → 70/15/15 분할 → CLIP 임베딩 사전 계산.
 
 단계:
   meta  : 데이터셋 로드, 화가 선별, 분할, 이미지 저장(긴 변 512px), artifacts/meta.csv 생성   (이슈 #3)
@@ -9,7 +9,7 @@ Colab(GPU) 사용 예:
   !pip install -q datasets transformers torch pillow pandas scikit-learn
   !python scripts/build_index.py --stage all --dataset slpkl/wikiart-subsample
 
-이미지(data/images)와 embeddings.npy 가 100MB를 넘으면 Git에 올리지 말고 공유 드라이브로 전달한다.
+생성되는 데이터(data/images, artifacts/meta.csv, artifacts/embeddings.npy)는 Git에 올리지 않고 공유 드라이브로 전달한다.
 """
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ def main():
     ap.add_argument("--stage", choices=["meta", "embed", "all"], default="all")
     ap.add_argument("--dataset", default="slpkl/wikiart-subsample")
     ap.add_argument("--hf-split", default="train")
-    ap.add_argument("--n-artists", type=int, default=24)
+    ap.add_argument("--n-artists", type=int, default=23)
     ap.add_argument("--min-count", type=int, default=50)
     ap.add_argument("--max-per-artist", type=int, default=300)
     ap.add_argument("--image-dir", default="data/images")

@@ -57,7 +57,6 @@ ARTIST_STYLE = {
     "Vincent van Gogh": "Post-Impressionism",
 }
 ARTISTS = list(ARTIST_STYLE)
-STYLES = sorted(set(ARTIST_STYLE.values()))
 GENRES = ["landscape", "portrait", "still_life", "religious_painting", "sketch_and_study", "genre_painting"]
 WORKS_PER_ARTIST = 20  # 가짜 인덱스: 14 train / 3 val / 3 test
 
@@ -102,7 +101,7 @@ def _fake_index() -> tuple[np.ndarray, pd.DataFrame]:
 
 
 # ───────────────────────── 이슈 #3: 화가 선별 · 분할 ─────────────────────────
-def select_artists(df: pd.DataFrame, n: int = 24, min_count: int = 50,
+def select_artists(df: pd.DataFrame, n: int = 23, min_count: int = 50,
                    exclude: tuple[str, ...] = ("Unknown Artist", "Unknown")) -> list[str]:
     """작품 수가 많은 순으로 화가 n명을 고른다 (동률은 이름순, 항상 같은 결과)."""
     counts = df[~df["artist"].isin(exclude)]["artist"].value_counts()
