@@ -9,7 +9,7 @@ Colab(GPU) 사용 예:
   !pip install -q datasets transformers torch pillow pandas scikit-learn
   !python scripts/build_index.py --stage all --dataset slpkl/wikiart-subsample
 
-생성되는 데이터(data/images, artifacts/meta.csv, artifacts/embeddings.npy)는 Git에 올리지 않고 공유 드라이브로 전달한다.
+이미지(data/images)는 Git에 올리지 않는다. artifacts/의 meta.csv·embeddings.npy·clip_model.txt(약 14MB)만 커밋한다.
 """
 from __future__ import annotations
 

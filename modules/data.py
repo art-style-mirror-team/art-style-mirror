@@ -218,7 +218,7 @@ def load_index(artifacts_dir: Path | str = ARTIFACTS) -> dict:
     """{"emb": (N,512), "meta": DataFrame} 를 반환. 행 수와 모델 버전을 검사한다."""
     d = Path(artifacts_dir)
     if not ((d / "embeddings.npy").exists() and (d / "meta.csv").exists()):
-        # Git에는 데이터를 올리지 않으므로, 파일을 아직 못 받은 팀원도 앱·테스트는 돌릴 수 있게 한다.
+        # artifacts 파일이 없는 환경(CI 등)에서도 앱·테스트가 돌도록 가짜 인덱스로 대체한다.
         log.warning("embeddings.npy·meta.csv가 없어 가짜 인덱스를 씁니다. 평가·결과 보고에는 쓰지 마세요.")
         emb, meta = _fake_index()
         meta = meta.copy()
