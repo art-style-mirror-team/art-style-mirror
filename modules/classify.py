@@ -48,12 +48,6 @@ TYPE_PROMPTS: dict[str, list[str]] = {
 }
 
 
-def _l2(v: np.ndarray) -> np.ndarray:
-    """마지막 축 기준 L2 정규화(0 벡터는 그대로 둔다)."""
-    norm = np.linalg.norm(v, axis=-1, keepdims=True)
-    return v / np.maximum(norm, 1e-12)
-
-
 def load_calibration() -> dict:
     if CALIBRATION_PATH.exists():
         return {**DEFAULT_CALIBRATION, **json.loads(CALIBRATION_PATH.read_text(encoding="utf-8"))}
@@ -100,12 +94,12 @@ def detect_type(img_emb: np.ndarray) -> str:
     모듈 경유(`data.embed_text`)로 부른다.
     """
     # 입력은 list 등으로 와도 받는다. 방향만 보므로 L2 정규화해 크기에 불변이게 한다.
-    v = _l2(np.asarray(img_emb, dtype=np.float32))
+    v = _l2_normalize(img_emb)
 
     best_type, best_sim = None, -np.inf
     for type_name, prompts in TYPE_PROMPTS.items():  # dict는 삽입 순서 보존 → 결정적
         text_emb = np.asarray(data.embed_text(prompts), dtype=np.float32)
-        prototype = _l2(text_emb.mean(axis=0))
+        prototype = _l2_normalize(text_emb.mean(axis=0))
         sim = float(prototype @ v)
         if sim > best_sim:  # 동률이면 앞의 유형 유지 → 같은 입력에 같은 결과
             best_sim, best_type = sim, type_name
