@@ -1,0 +1,1 @@
+"#13 modules/classify.py의 similar_works()를 실제 색인에 맞게 정리한다. contracts/interfaces.md는 변경 불가. 입력과 색인 임베딩을 L2 정규화해 코사인 유사도로 검색하고, 유사도 0.95 이상은 자기 자신으로 보고 제외한다. 검색 범위는 색인 전체(train/val/test)다. 반환값은 파이썬 기본 타입(str, float)으로 하고, k=0, k가 후보 수보다 큰 경우, 동점일 때도 결정적으로 동작하게 한다. 동작 테스트는 tests/test_classify.py에 추가하고 tests/test_smoke.py는 고치지 않는다."
