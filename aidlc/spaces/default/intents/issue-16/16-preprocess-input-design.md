@@ -21,4 +21,4 @@
 
 - 반환은 RGB `np.ndarray`, `uint8`, shape `(H, W, 3)`이며 긴 변은 512px이다. 원본 배열은 직접 수정하지 않는다.
 - 종이 영역 자르기, 화면을 채운 따뜻한 조명 스케치의 중립화, 종이 검출 없이도 화이트밸런스를 판단하는 동작, 단색의 채도 높은 컬러 입력 보존을 `tests/test_features.py`에서 확인한다.
-- 로컬 Windows 보안 정책으로 cv2/numpy 실행이 차단되어 pytest는 GitHub CI에서 검증한다.
+

@@ -1,0 +1,1 @@
+"#22 해석 문장 템플릿(입력 유형별 사진/그림/스케치, 등급별 높음/보통/낮음 문구, CLIP 키워드). 수정 파일: modules/explain.py, tests/test_explain.py. contracts/interfaces.md는 변경 불가. 완료 기준: 입력 3종 × 등급 3종 모두 자연스러운 문장"
