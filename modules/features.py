@@ -6,13 +6,19 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import logging
 from functools import lru_cache
+from pathlib import Path
 
 import cv2
 import numpy as np
 from sklearn.cluster import MiniBatchKMeans
 
 from modules.data import ARTISTS
+
+log = logging.getLogger(__name__)
+PROFILES_PATH = Path(__file__).resolve().parents[1] / "artifacts" / "profiles.json"
 
 LONG_SIDE = 512
 EPS = 0.01
@@ -220,10 +226,31 @@ def _profiles() -> dict:
     return out
 
 
-def load_profiles() -> dict:
-    """{artist: {feature: (mean, std)}}. 실제 구현은 학습셋으로만 계산한다. (스텁: 가짜 프로필)"""
-    # TODO(#19): 스텁 — #19 artifacts/profiles.json 로드, 학습셋 기준 (담당 C)
-    return {a: dict(p) for a, p in _profiles().items()}
+@lru_cache(maxsize=4)
+def _cached_profiles(
+    path: str, stamp: tuple[int, int]
+) -> dict[str, dict[str, tuple[float, float]]]:
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    return {
+        artist: {feat: (float(vals[0]), float(vals[1])) for feat, vals in feats.items()}
+        for artist, feats in raw.items()
+    }
+
+
+def load_profiles(path: str | Path = PROFILES_PATH) -> dict:
+    """{artist: {feature: (mean, std)}}. 학습셋으로 계산된 artifacts/profiles.json을 로드한다."""
+    target = Path(path)
+    if not target.exists():
+        if target.resolve() == PROFILES_PATH.resolve():
+            log.warning(
+                "profiles.json이 없어 가짜 프로필을 씁니다. build_profiles.py를 실행하세요."
+            )
+            return {a: dict(p) for a, p in _profiles().items()}
+        raise FileNotFoundError(f"프로필 파일을 찾을 수 없습니다: {target}")
+
+    stat = target.stat()
+    loaded = _cached_profiles(str(target.resolve()), (stat.st_mtime_ns, stat.st_size))
+    return {a: dict(p) for a, p in loaded.items()}
 
 
 def predict_cv(features: dict, gray: bool = False) -> dict:
