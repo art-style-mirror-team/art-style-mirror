@@ -437,7 +437,20 @@ def _palette_hex(feats) -> list[str] | None:
     if not isinstance(palette, (list, tuple)) or not palette:
         return None
     out = [_hex(c) for c in list(palette)[:PALETTE_LEN]]
-    return out if all(out) else None
+    if not all(out):
+        return None
+    # 내 사진과 명화의 대표색을 나란히 비교하기 쉽게 어두운 색 → 밝은 색 순으로 놓는다.
+    return sorted(out, key=_luminance)
+
+
+def _luminance(hex_color: str) -> float:
+    """hex 색의 상대 밝기(sRGB → 선형, Rec. 709 가중치). 0(검정)~1(흰색)."""
+    r, g, b = (int(hex_color[i : i + 2], 16) / 255 for i in (1, 3, 5))
+
+    def lin(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
 
 
 def _kind(result: dict) -> str:

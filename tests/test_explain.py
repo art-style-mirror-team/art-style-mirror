@@ -315,7 +315,8 @@ def test_build_view_palette_hex_and_near_far_by_difference():
     feats["palette"] = [[255, 0, 16], [0, 0, 0], [12, 34, 56], [255, 255, 255], [1, 2, 3]]
     w = explain.build_view(result, [_work(result, "Claude Monet", feats=feats)])["compare"]
     w = w["works"][0]
-    assert w["palette"] == ["#ff0010", "#000000", "#0c2238", "#ffffff", "#010203"]
+    # 어두운 색 → 밝은 색 순으로 정렬된다
+    assert w["palette"] == ["#000000", "#010203", "#0c2238", "#ff0010", "#ffffff"]
     assert set(w["near_keys"]) == {keys[0], keys[1]}
     assert set(w["far_keys"]) == {keys[2], keys[3]}
     assert w["near"] == [explain.FEATURE_KO[k] for k in w["near_keys"]]
@@ -427,3 +428,34 @@ def test_build_view_shows_korean_style_for_underscore_styles():
     assert [s["name"] for s in view["styles"]] == ["후기 인상주의", "아르누보", "사실주의"]
     assert view["styles"][0]["name_orig"] == "Post_Impressionism"
     assert view["head"]["style"] == "후기 인상주의"
+
+
+def test_palette_sorted_by_perceived_brightness_not_rgb_sum():
+    # 파랑(0,0,255)은 RGB 합이 회색(64,64,64)보다 크지만 눈에는 더 어둡다.
+    # 자홍(255,0,255)은 초록(0,255,0)보다 합이 크지만 더 어둡다.
+    feats = {"palette": [[0, 255, 0], [255, 0, 255], [0, 0, 255], [64, 64, 64], [255, 255, 255]]}
+    assert explain._palette_hex(feats) == ["#404040", "#0000ff", "#ff00ff", "#00ff00", "#ffffff"]
+
+
+def test_mine_palette_is_sorted_dark_to_light():
+    result = dict(_result())
+    result["features"] = dict(result["features"])
+    result["features"]["palette"] = [
+        [250, 250, 250],
+        [10, 10, 10],
+        [128, 128, 128],
+        [200, 200, 200],
+        [60, 60, 60],
+    ]
+    work = {
+        "id": "1",
+        "artist": result["top3"][0][0],
+        "style": "Impressionism",
+        "score": 0.8,
+        "image": None,
+        "features": None,
+        "top1_work": True,
+    }
+    view = explain.build_view(result, [work])
+    lum = [explain._luminance(c) for c in view["compare"]["mine_palette"]]
+    assert lum == sorted(lum)
