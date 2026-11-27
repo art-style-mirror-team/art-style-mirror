@@ -4,7 +4,7 @@ contracts/interfaces.md의 시그니처를 따른다.
   embed_image(img) -> (512,)   L2 정규화
   embed_text(texts) -> (n,512) L2 정규화
   load_index() -> {"emb": (N,512), "meta": DataFrame[id, artist, style, genre, path, split]}
-  clip_keywords(emb, k=3)      # 이슈 #7에서 구현
+  clip_keywords(emb, k=3) -> [(키워드, 점수), ...]
 이미지는 모두 RGB np.ndarray(uint8).
 """
 
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 from functools import lru_cache
 from pathlib import Path
 
@@ -68,24 +69,71 @@ GENRES = [
 ]
 WORKS_PER_ARTIST = 20  # 가짜 인덱스: 14 train / 3 val / 3 test
 
-# clip_keywords() 스텁이 고르는 표현 (#7에서 반대 문장쌍 비교로 교체)
-KEYWORDS = [
-    "두꺼운 붓 자국",
-    "소용돌이치는 하늘",
-    "선명한 원색",
-    "차분한 색조",
-    "부드러운 빛",
-    "강한 명암 대비",
-    "단순한 기하학 형태",
-    "꿈같은 분위기",
-    "섬세한 윤곽선",
-    "평면적인 색면",
-    "야외 풍경",
-    "인물 초상",
-    "정물",
-    "어두운 배경",
-    "밝은 햇살",
+# clip_keywords()가 쓰는 반대 문장쌍: (한쪽 표시어, 반대쪽 표시어, 한쪽 영어 표현들, 반대쪽 영어 표현들)
+KEYWORD_PAIRS = [
+    (
+        "두꺼운 붓 자국",
+        "매끈한 붓질",
+        ["thick visible brush strokes", "heavy impasto texture"],
+        ["smooth blended brushwork", "a polished surface with no visible strokes"],
+    ),
+    (
+        "선명한 색감",
+        "차분한 색감",
+        ["vivid saturated colors", "bold bright colors"],
+        ["muted subdued colors", "a soft desaturated palette"],
+    ),
+    (
+        "강한 명암 대비",
+        "부드러운 조명",
+        ["strong contrast between light and dark", "dramatic lighting"],
+        ["soft even lighting", "gentle low contrast tones"],
+    ),
+    (
+        "따뜻한 색조",
+        "차가운 색조",
+        ["a warm color palette of reds and oranges", "warm golden tones"],
+        ["a cool color palette of blues and greens", "cool silvery tones"],
+    ),
+    (
+        "어두운 분위기",
+        "밝은 분위기",
+        ["a dark moody atmosphere", "deep shadows"],
+        ["a bright cheerful atmosphere", "a luminous sunny feeling"],
+    ),
+    (
+        "섬세한 사실 묘사",
+        "단순화된 형태",
+        ["fine realistic detail", "precise lifelike rendering"],
+        ["simplified abstract shapes", "flat geometric forms"],
+    ),
+    (
+        "역동적인 움직임",
+        "정적인 구도",
+        ["dynamic swirling movement", "energetic dramatic motion"],
+        ["a calm still composition", "a quiet static scene"],
+    ),
+    (
+        "뚜렷한 윤곽선",
+        "흐릿한 윤곽",
+        ["bold clear outlines", "sharp defined edges"],
+        ["soft blurred edges", "hazy indistinct contours"],
+    ),
+    (
+        "평면적인 화면",
+        "깊은 원근감",
+        ["a flat two-dimensional surface", "flat areas of color"],
+        ["deep perspective and depth", "a strong sense of space"],
+    ),
+    (
+        "몽환적인 분위기",
+        "현실적인 분위기",
+        ["a dreamlike fantastical mood", "a surreal imaginative scene"],
+        ["an ordinary realistic scene", "an everyday naturalistic view"],
+    ),
 ]
+KEYWORD_TEMPLATES = ("a painting with {}", "an artwork with {}")
+KEYWORDS = [w for pos, neg, _, _ in KEYWORD_PAIRS for w in (pos, neg)]  # 호환용: 가능한 모든 표시어
 
 
 def _seed(*parts: bytes | str) -> int:
@@ -322,12 +370,45 @@ def load_index(artifacts_dir: Path | str = ARTIFACTS) -> dict:
     return {"emb": emb, "meta": meta.copy()}
 
 
-# ───────────────────────── 이슈 #7 (미구현) ─────────────────────────
+# ───────────────────────── 이슈 #7: 닮은 이유 키워드 ─────────────────────────
+_KW_CACHE: dict = {"fn": None, "axes": None}
+
+
+def _unit_vec(v: np.ndarray) -> np.ndarray:
+    return v / (np.linalg.norm(v) + 1e-8)
+
+
+def _keyword_axes() -> np.ndarray:
+    """쌍마다 (한쪽 문장 평균 - 반대쪽 문장 평균) 방향 벡터 (P, 512). 문장 표현을 여러 개 평균내는 앙상블."""
+    fn = embed_text
+    if _KW_CACHE["fn"] is not fn:
+        axes = []
+        for _, _, pos, neg in KEYWORD_PAIRS:
+
+            def side(phrases):
+                texts = [t.format(p) for p in phrases for t in KEYWORD_TEMPLATES]
+                return _unit_vec(np.asarray(embed_text(texts), dtype=np.float32).mean(axis=0))
+
+            axes.append(side(pos) - side(neg))
+        _KW_CACHE["fn"], _KW_CACHE["axes"] = fn, np.stack(axes).astype(np.float32)
+    return _KW_CACHE["axes"]
+
+
 def clip_keywords(emb: np.ndarray, k: int = 3) -> list[tuple]:
-    """[("두꺼운 붓 자국", 0.71), ...] 점수 내림차순. (스텁: 임베딩으로 고른 가짜 키워드)"""
-    # TODO(#7): 스텁 — 반대 문장쌍 비교 + 표현 앙상블로 교체 (담당 A)
-    emb = np.asarray(emb, dtype=np.float32)
-    rng = np.random.default_rng(_seed(emb.tobytes()))
-    picks = rng.choice(len(KEYWORDS), size=min(k, len(KEYWORDS)), replace=False)
-    scores = np.sort(rng.uniform(0.55, 0.85, size=len(picks)))[::-1]
-    return [(KEYWORDS[i], round(float(s), 2)) for i, s in zip(picks, scores)]
+    """그림의 특징 키워드 k개를 [("두꺼운 붓 자국", 0.91), ...] 점수 내림차순으로 돌려준다.
+
+    반대 문장쌍마다 '어느 쪽에 더 가까운지'를 보되, 전체 명화(인덱스) 평균 대비 얼마나 치우쳤는지로 잰다.
+    점수는 0.5(평범) ~ 1.0(매우 뚜렷). 한 쌍에서는 한쪽 표시어만 나온다.
+    """
+    emb = np.asarray(emb, dtype=np.float32).reshape(-1)
+    if emb.shape != (EMB_DIM,):
+        raise ValueError(f"임베딩은 ({EMB_DIM},)여야 합니다: {emb.shape}")
+    axes = _keyword_axes()
+    ref = load_index()["emb"] @ axes.T  # (N, P): 전체 명화의 쌍별 치우침
+    z = (_unit_vec(emb) @ axes.T - ref.mean(axis=0)) / (ref.std(axis=0) + 1e-6)
+    out = []
+    for i in np.argsort(-np.abs(z))[: max(k, 0)]:
+        pos, neg = KEYWORD_PAIRS[i][:2]
+        score = 0.5 * (1.0 + math.erf(abs(float(z[i])) / math.sqrt(2.0)))
+        out.append((pos if z[i] > 0 else neg, round(score, 2)))
+    return out
