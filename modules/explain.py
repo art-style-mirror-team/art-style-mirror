@@ -60,12 +60,6 @@ LEVEL_TEXT = {
     ("sketch", "낮음"): "선만으로는 뚜렷하게 닮은 화가를 찾기 어려워요.",
 }
 LOW_TAIL = " 두 관점의 결과를 따로 보여드릴게요."  # "낮음" 문구 뒤에 붙인다
-# 화면(build_view, #37)의 등급 배지 한 줄. 결과 카드 문장은 위 LEVEL_TEXT를 쓴다.
-LEVEL_NOTE = {
-    "높음": "",
-    "보통": "애매한 부분이 있어요.",
-    "낮음": "뚜렷하게 닮은 화가가 없어요.",
-}
 KEYWORD_TAIL = "두드러져요."  # CLIP 키워드 문장 끝
 DISCLAIMER = "픽셀 수치 기반의 통계적 해석이며 미술사적 평가가 아닙니다."
 
@@ -585,8 +579,10 @@ def build_view(result: dict, works: list[dict] | None = None) -> dict:
     clip_first = str(result["p_clip_top"][0][0]) if result["p_clip_top"] else ""
     cv_first = str(result["p_cv_top"][0][0]) if result["p_cv_top"] else ""
 
+    # 등급 문구는 결과 카드(#22)와 같은 9칸 문구표를 쓴다. "낮음"이면 제목이 그 문구라 배지에서는 뺀다.
+    _, level_text = _level_text(result.get("input_type"), level)
     if low:
-        title = LEVEL_NOTE["낮음"].rstrip(".")
+        title = level_text.rstrip(".")
         sub = "두 관점의 결과를 따로 보여 드려요"
     else:
         title = full
@@ -609,7 +605,7 @@ def build_view(result: dict, works: list[dict] | None = None) -> dict:
         "level": {
             "label": level,
             "bars": LEVEL_BARS.get(level, 1),
-            "note": LEVEL_NOTE.get(level) or "결과가 뚜렷해요.",
+            "note": "" if low else level_text,
         },
         "top3": [dict(rank=i, **item) for i, item in enumerate(_named_pcts(top3), 1)],
         "views": {
