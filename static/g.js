@@ -1134,7 +1134,7 @@
           : "색과 선을 " + n + "가지로 재서 비교했어요.",
       }),
     ];
-    // 고른 명화의 특징이 있으면 "○○ 평균"·"이 명화" 탭 (FR4.6). 없으면 탭을 숨긴다.
+    // 고른 명화의 특징이 있으면 "○○ 평균과"·"가장 닮은 명화와" 탭 (FR4.6). 없으면 탭을 숨긴다.
     var w = selWork();
     var canWork = !!(w && w.radar && typeof w.radar === "object" && n >= 3);
     if (!canWork) st.whyMode = "avg";
@@ -1146,7 +1146,7 @@
           class: "g-tab",
           role: "tab",
           "data-testid": "g-tab-avg",
-          text: artist + " 평균",
+          text: artist + " 평균과",
           on: {
             click: function () {
               setWhyMode("avg");
@@ -1158,7 +1158,7 @@
           class: "g-tab",
           role: "tab",
           "data-testid": "g-tab-work",
-          text: "이 명화",
+          text: "가장 닮은 명화와",
           on: {
             click: function () {
               setWhyMode("work");
