@@ -136,3 +136,174 @@ def test_similar_works_reads_by_position_not_label(monkeypatch):
     assert [w["id"] for w in works] == ["P0"]  # 코사인 0.9가 1위(행 위치 0)
     assert works[0]["artist"] == "artist-P0"
     assert works[0]["path"] == "data/P0.jpg"
+
+
+# --- #11 logreg -------------------------------------------------------------
+# 선형 분류기(로지스틱 회귀) `_fit_linear`/`_save_linear`/`_load_linear`/`_linear_logits`
+# 동작 테스트. 형식 검사는 `tests/test_smoke.py`가 하므로 건드리지 않는다.
+
+
+def _linear_index(dim: int = 8) -> dict:
+    """train/val 섞인 가짜 색인. 학습셋은 class A(0번 축)·B(1번 축) 두 개,
+    검증셋은 학습에 없는 class C(2번 축)로 둬서 "학습셋만 사용"을 확인할 수 있게 한다."""
+    rng = np.random.default_rng(0)
+    emb_rows: list[np.ndarray] = []
+    artist: list[str] = []
+    style: list[str] = []
+    split: list[str] = []
+
+    def add(axis: int, cls: str, sp: str, n: int) -> None:
+        for _ in range(n):
+            v = rng.normal(0.0, 0.03, size=dim).astype(np.float32)
+            v[axis] += 1.0
+            emb_rows.append(v)
+            artist.append(cls)
+            style.append(f"s{cls}")
+            split.append(sp)
+
+    add(0, "A", "train", 6)
+    add(1, "B", "train", 6)
+    add(2, "C", "val", 4)  # 학습에 없는 라벨: 클래스에 영향 주면 안 됨
+    emb = np.array(emb_rows, dtype=np.float32)
+    meta = pd.DataFrame(
+        {
+            "id": [str(i) for i in range(len(artist))],
+            "artist": artist,
+            "style": style,
+            "genre": ["landscape"] * len(artist),
+            "path": [f"data/{i}.jpg" for i in range(len(artist))],
+            "split": split,
+        }
+    )
+    return {"emb": emb, "meta": meta}
+
+
+def _biased(dim: int, axis: int) -> np.ndarray:
+    """특정 축 쪽으로 치우친 입력 1장 (shape (1, dim))."""
+    v = np.zeros((1, dim), dtype=np.float32)
+    v[0, axis] = 1.0
+    return v
+
+
+# FR2.1 — 학습셋(train)만으로 학습한다: val 라벨 "C"는 클래스에 들어가지 않는다
+def test_fit_linear_uses_train_split_only(monkeypatch):
+    classify._load_linear.cache_clear()
+    monkeypatch.setattr(classify, "load_index", _linear_index)
+
+    model = classify._fit_linear("artist")
+    assert list(model.classes_) == ["A", "B"]  # "C"(val) 없음
+
+    style_model = classify._fit_linear("style")
+    assert list(style_model.classes_) == ["sA", "sB"]  # "sC"(val) 없음
+
+
+# FR5.4 — 특정 클래스 쪽으로 치우친 입력은 그 이름의 z가 최대
+def test_linear_logits_biased_input_argmax(monkeypatch):
+    classify._load_linear.cache_clear()
+    monkeypatch.setattr(classify, "load_index", _linear_index)
+    model = classify._fit_linear("artist")
+
+    names, z = classify._linear_logits(_biased(8, 0), "artist", model=model)
+    assert names[int(np.argmax(z[0]))] == "A"  # 0번 축 → A
+
+    names, z = classify._linear_logits(_biased(8, 1), "artist", model=model)
+    assert names[int(np.argmax(z[0]))] == "B"  # 1번 축 → B
+
+
+# FR3, FR4, NFR1 — 저장→로드 라운드트립 후 로짓이 동일
+def test_linear_logits_save_load_roundtrip(tmp_path, monkeypatch):
+    classify._load_linear.cache_clear()
+    monkeypatch.setattr(classify, "load_index", _linear_index)
+    models = {"artist": classify._fit_linear("artist"), "style": classify._fit_linear("style")}
+
+    path = tmp_path / "linear.pkl"
+    classify._save_linear(models, path=path)
+    assert path.exists()
+
+    loaded = classify._load_linear(path)
+    assert loaded["sklearn_version"] == __import__("sklearn").__version__
+    assert loaded["C"] == {"artist": 1.0, "style": 1.0}
+
+    E = _biased(8, 0)
+    names_fit, z_fit = classify._linear_logits(E, "artist", model=models["artist"])
+    names_load, z_load = classify._linear_logits(E, "artist", model=loaded["artist"])
+    assert names_fit == names_load
+    assert np.array_equal(z_fit, z_load)
+
+
+# FR5.5 — 반환 모양: (이름 목록, z), z.shape == (n, 이름 수), 이름 = classes_ 정렬
+def test_linear_logits_shape(monkeypatch):
+    classify._load_linear.cache_clear()
+    monkeypatch.setattr(classify, "load_index", _linear_index)
+    model = classify._fit_linear("artist")
+
+    E = np.concatenate([_biased(8, 0), _biased(8, 1)], axis=0)  # n=2
+    names, z = classify._linear_logits(E, "artist", model=model)
+    assert names == list(model.classes_) == ["A", "B"]
+    assert isinstance(names, list)
+    assert z.shape == (2, len(names))  # 이진 분류를 (n, 이름 수)로 맞춤
+
+
+# FR5.2 — 1차원 입력이면 ValueError
+def test_linear_logits_rejects_1d(monkeypatch):
+    classify._load_linear.cache_clear()
+    monkeypatch.setattr(classify, "load_index", _linear_index)
+    model = classify._fit_linear("artist")
+
+    with pytest.raises(ValueError):
+        classify._linear_logits(np.zeros(8, dtype=np.float32), "artist", model=model)
+
+
+# FR5.3 — 0장 입력이면 (이름 목록, (0, 이름 수))
+def test_linear_logits_empty_input(monkeypatch):
+    classify._load_linear.cache_clear()
+    monkeypatch.setattr(classify, "load_index", _linear_index)
+    model = classify._fit_linear("artist")
+
+    names, z = classify._linear_logits(np.zeros((0, 8), dtype=np.float32), "artist", model=model)
+    assert names == ["A", "B"]
+    assert z.shape == (0, 2)
+
+
+# FR4.2 — 없는 경로로 로드하면 알기 쉬운 FileNotFoundError
+def test_load_linear_missing_file(tmp_path):
+    classify._load_linear.cache_clear()
+    missing = tmp_path / "does-not-exist.pkl"
+    with pytest.raises(FileNotFoundError) as exc:
+        classify._load_linear(missing)
+    assert str(missing) in str(exc.value)  # 경로를 알려 준다
+
+
+# FR5.4, NFR2 (R1) — [0, z]로 쌓은 덕에 softmax(z)가 model.predict_proba와 일치한다
+def test_linear_logits_softmax_matches_predict_proba(monkeypatch):
+    classify._load_linear.cache_clear()
+    monkeypatch.setattr(classify, "load_index", _linear_index)
+    model = classify._fit_linear("artist")  # 2클래스(A, B)
+
+    E = np.concatenate([_biased(8, 0), _biased(8, 1)], axis=0)  # n=2
+    _, z = classify._linear_logits(E, "artist", model=model)
+    e = np.exp(z - z.max(axis=1, keepdims=True))
+    softmax = e / e.sum(axis=1, keepdims=True)
+    proba = model.predict_proba(classify._l2_normalize(E))
+    assert np.allclose(softmax, proba)
+
+
+# FR3.1 (R2) — 같은 경로 재저장 시 cache_clear 덕에 새 C가 다시 읽힌다
+def test_save_linear_resave_updates_cache(tmp_path, monkeypatch):
+    classify._load_linear.cache_clear()
+    monkeypatch.setattr(classify, "load_index", _linear_index)
+    path = tmp_path / "linear.pkl"
+
+    m1 = {
+        "artist": classify._fit_linear("artist", C=1.0),
+        "style": classify._fit_linear("style", C=1.0),
+    }
+    classify._save_linear(m1, path=path)
+    assert classify._load_linear(path)["C"] == {"artist": 1.0, "style": 1.0}
+
+    m2 = {
+        "artist": classify._fit_linear("artist", C=0.1),
+        "style": classify._fit_linear("style", C=0.1),
+    }
+    classify._save_linear(m2, path=path)
+    assert classify._load_linear(path)["C"] == {"artist": 0.1, "style": 0.1}
