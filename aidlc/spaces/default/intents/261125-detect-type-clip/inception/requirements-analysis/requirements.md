@@ -4,7 +4,7 @@
 
 `modules/classify.py`(Unit B)의 스텁 `detect_type(img_emb)`를 실제 CLIP zero-shot
 분류기로 바꾼다. 목표는 입력 이미지의 유형(사진·그림·스케치)을 CLIP 임베딩만으로
-판별해, 이후 파이프라인(화이트밸런스 적용 여부, 결과 카드의 `input_type` 표시)이
+판별해, 결과 카드의 `input_type`(설명 문장 첫머리) 표시에
 쓸 수 있는 세 리터럴 중 하나를 안정적으로 돌려주는 것이다. 유형별 영어 문장
 앙상블을 `data.embed_text(...)`로 임베딩하고 입력 임베딩과 비교한다.
 
