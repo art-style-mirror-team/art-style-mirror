@@ -36,7 +36,7 @@ def _paper_bounds(img: np.ndarray) -> tuple[int, int, int, int] | None:
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
     mask = cv2.inRange(
         hsv,
-        np.array([0, 0, 160], dtype=np.uint8),
+        np.array([0, 0, 120], dtype=np.uint8),
         np.array([180, 90, 255], dtype=np.uint8),
     )
     kernel_size = max(3, min(31, min(h, w) // 40 | 1))
@@ -46,7 +46,12 @@ def _paper_bounds(img: np.ndarray) -> tuple[int, int, int, int] | None:
 
     image_area = h * w
     for contour in sorted(contours, key=cv2.contourArea, reverse=True):
-        x, y, box_w, box_h = cv2.boundingRect(contour)
+        perimeter = cv2.arcLength(contour, True)
+        polygon = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
+        if not (4 <= len(polygon) <= 8 and cv2.isContourConvex(polygon)):
+            continue
+
+        x, y, box_w, box_h = cv2.boundingRect(polygon)
         box_area = box_w * box_h
         if box_area < image_area * 0.3 or box_area > image_area * 0.98:
             continue
@@ -57,53 +62,51 @@ def _paper_bounds(img: np.ndarray) -> tuple[int, int, int, int] | None:
         if cv2.contourArea(contour) / box_area < 0.75:
             continue
 
-        perimeter = cv2.arcLength(contour, True)
-        polygon = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
-        if 4 <= len(polygon) <= 8 and cv2.isContourConvex(polygon):
-            return x, y, box_w, box_h
+        trim_x = min(round(box_w * 0.01), (box_w - 1) // 2)
+        trim_y = min(round(box_h * 0.01), (box_h - 1) // 2)
+        return (
+            x + trim_x,
+            y + trim_y,
+            box_w - 2 * trim_x,
+            box_h - 2 * trim_y,
+        )
     return None
 
 
-def _paper_sketch_candidates(
-    img: np.ndarray, *, max_dark_fraction: float | None = None
-) -> np.ndarray | None:
-    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-    saturation = hsv[:, :, 1]
-    value = hsv[:, :, 2]
-    bright = value >= 120
-    if bright.mean() < 0.6:
+def _sketch_gains(img: np.ndarray) -> np.ndarray | None:
+    """Return lighting gains only when balancing leaves a neutral line drawing."""
+    h, w = img.shape[:2]
+    scale = LONG_SIDE / max(h, w)
+    small = (
+        img
+        if scale >= 1
+        else cv2.resize(
+            img,
+            (max(1, round(w * scale)), max(1, round(h * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+    )
+    f = cv2.GaussianBlur(small, (5, 5), 0).astype(np.float32)
+    lum = f.mean(axis=2)
+    light = np.median(f[lum >= np.percentile(lum, 50)], axis=0)
+    if light.min() < 40:
         return None
 
-    lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
-    bright_lab = lab[bright].astype(np.float32)
-    if np.max(bright_lab[:, 1:3].std(axis=0)) > 10 or saturation[bright].mean() > 115:
+    gains = light.max() / light
+    if gains.max() > 1.8:
         return None
 
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    background_lightness = float(np.median(bright_lab[:, 0]))
-    dark = lab[:, :, 0] <= background_lightness - 35
-    if max_dark_fraction is not None and dark.mean() > max_dark_fraction:
+    balanced = f * gains
+    spread = balanced.max(axis=2) - balanced.min(axis=2)
+    valid = lum > 50
+    color_fraction = np.count_nonzero((spread > 20) & valid) / max(1, np.count_nonzero(valid))
+    if color_fraction > 0.02:
         return None
-    edges = cv2.Canny(gray, 30, 100)
-    edges = cv2.dilate(edges, np.ones((3, 3), dtype=np.uint8))
-    dark_line_fraction = np.count_nonzero(dark & (edges > 0)) / (img.shape[0] * img.shape[1])
-    if dark_line_fraction < 0.0015:
+
+    gray = cv2.cvtColor(small, cv2.COLOR_RGB2GRAY)
+    if np.count_nonzero(cv2.Canny(gray, 30, 100)) / gray.size < 0.002:
         return None
-    return bright & (saturation <= 115)
-
-
-def _white_balance_from_candidates(img: np.ndarray) -> np.ndarray:
-    candidates = _paper_sketch_candidates(img)
-    if candidates is None:
-        return img
-
-    pixels = img[candidates]
-    channel_medians = np.median(pixels, axis=0).astype(np.float32)
-    if np.any(channel_medians <= 0):
-        return img
-    gains = np.clip(channel_medians.max() / channel_medians, 0.75, 1.8)
-    balanced = img.astype(np.float32) * gains
-    return np.clip(balanced, 0, 255).astype(np.uint8)
+    return gains
 
 
 def preprocess_input(img: np.ndarray) -> np.ndarray:
@@ -121,7 +124,11 @@ def preprocess_input(img: np.ndarray) -> np.ndarray:
     if paper_bounds is not None:
         x, y, w, h = paper_bounds
         img = img[y : y + h, x : x + w]
-    img = _white_balance_from_candidates(img)
+    gains = _sketch_gains(img)
+    if gains is not None:
+        balanced = np.clip(img.astype(np.float32) * gains, 0, 255).astype(np.uint8)
+        gray = cv2.cvtColor(balanced, cv2.COLOR_RGB2GRAY)
+        img = np.repeat(gray[:, :, None], 3, axis=2)
 
     h, w = img.shape[:2]
     scale = LONG_SIDE / max(h, w)
@@ -134,15 +141,12 @@ def preprocess_input(img: np.ndarray) -> np.ndarray:
 
 
 def is_grayscale(img: np.ndarray) -> bool:
-    """채널 차이가 작거나 균일한 종이 배경과 어두운 선이 있으면 흑백(스케치)으로 본다."""
+    """채널 차이의 평균이 8 미만이면 흑백으로 본다."""
     x = np.asarray(img, dtype=np.int16)
     if x.ndim == 2:
         return True
     spread = x.max(axis=2) - x.min(axis=2)
-    return (
-        float(spread.mean()) < 8.0
-        or _paper_sketch_candidates(x.astype(np.uint8), max_dark_fraction=0.25) is not None
-    )
+    return float(spread.mean()) < 8.0
 
 
 def extract_features(img: np.ndarray, gray: bool = False) -> dict:
