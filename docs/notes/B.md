@@ -45,7 +45,7 @@
 ## 해야 할 설정
 
 - 이슈 #1 확인: `pytest -q`(main `910670a` 기준 30 passed, 2 skipped)와 `python app.py` 실행 결과를 이슈 #1에 댓글로 남긴다.
-- `README.md` 팀원 표의 B 줄에 GitHub 아이디(@dpdnjsh)를 채우는 PR을 올린다.
+- (완료, 2026-11-27) `README.md` 팀원 표의 B 줄에 GitHub 아이디를 채웠다(PR #55).
 - AI-DLC: `aidlc config --pin 2.11.4`, `aidlc doctor` (`docs/aidlc-guide.md`). 비교 이슈(#12, #14, #15)는 `/aidlc classic:`을 권한다.
 
 ## 리뷰
