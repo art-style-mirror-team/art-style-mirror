@@ -136,3 +136,42 @@ def test_analyze_drops_color_features_only_for_sketch(gray_input):
 def test_empty_features():
     out = explain.compare({}, PROFILES, "A", "B")
     assert out == {"why_top1": [], "toward_top2": [], "z": {}}
+
+
+# --- 레이더 차트 (#45: direction은 0~1 방향 일관성) ---------------------------
+
+
+def _radar_series(features: dict, profile: dict) -> tuple[list[str], list[float], list[float]]:
+    fig = explain._radar(features, profile, "A")
+    ax = fig.axes[0]
+    labels = [t.get_text() for t in ax.get_xticklabels()]
+    mine, theirs = (list(line.get_ydata())[:-1] for line in ax.lines[:2])  # 마지막 점은 닫기용
+    return labels, mine, theirs
+
+
+def test_radar_uses_direction_as_is():
+    labels, mine, theirs = _radar_series(
+        {"direction": 0.7, "edge_density": 0.3},
+        {"direction": (0.25, 0.1), "edge_density": (0.5, 0.1)},
+    )
+    assert labels == ["선 밀도", "선 방향 일관성"]
+    assert mine == pytest.approx([0.3, 0.7])
+    assert theirs == pytest.approx([0.5, 0.25])
+
+
+def test_radar_clips_out_of_range_values():
+    _, mine, theirs = _radar_series(
+        {"direction": 1.4, "edge_density": -0.2},
+        {"direction": (-0.1, 0.1), "edge_density": (2.0, 0.1)},
+    )
+    assert mine == pytest.approx([0.0, 1.0])
+    assert theirs == pytest.approx([1.0, 0.0])
+
+
+def test_radar_skips_non_numeric_and_missing_features():
+    labels, mine, _ = _radar_series(
+        {"direction": 0.6, "palette": [[0, 0, 0]] * 5, "roughness": "x"},
+        {"direction": (0.5, 0.1), "roughness": (0.5, 0.1), "contrast": (0.5, 0.1)},
+    )
+    assert labels == ["선 방향 일관성"]
+    assert mine == pytest.approx([0.6])

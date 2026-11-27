@@ -30,7 +30,7 @@ FEATURE_KO = {
     "warmth": "색온도",
     "color_diversity": "색 다양성",
     "edge_density": "선 밀도",
-    "direction": "선 방향",
+    "direction": "선 방향 일관성",
     "straight_ratio": "직선 비율",
     "roughness": "거칠기",
     "stroke_length": "윤곽선 길이",
@@ -167,16 +167,15 @@ def _korean_font() -> str | None:
     return next((n for n in _KO_FONT_CANDIDATES if n in available), None)
 
 
-def _radar_value(feature: str, value: float) -> float:
-    if feature == "direction":  # 각도(0~180)를 0~1로
-        value = value / 180.0
+def _radar_value(value: float) -> float:
+    """레이더 축 값. 모든 수치 특징이 0~1이라(direction은 #45부터 방향 일관성) 범위만 자른다."""
     return float(min(1.0, max(0.0, value)))
 
 
 def _radar(features: dict, profile: dict, artist: str) -> Figure:
     names = [f for f in FEATURE_KO if f in profile and isinstance(features.get(f), (int, float))]
-    mine = [_radar_value(f, features[f]) for f in names]
-    theirs = [_radar_value(f, profile[f][0]) for f in names]
+    mine = [_radar_value(features[f]) for f in names]
+    theirs = [_radar_value(profile[f][0]) for f in names]
     angles = np.linspace(0, 2 * np.pi, len(names), endpoint=False).tolist()
     font = _korean_font()
 
