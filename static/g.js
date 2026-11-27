@@ -453,6 +453,15 @@
     return w && typeof w === "object" ? w : null;
   }
 
+  // 색·선 레이더의 명화 탭 이름. 명화 페이지 제목과 맞춘다: 첫 명화가 1위 화가 작품이면 "가장 닮은",
+  // 화가와 상관없이 고른 첫 명화면 "가장 비슷한", "다른 명화와 비교"에서 2·3번째를 골랐으면 "고른".
+  function workTabLabel(w) {
+    var first = !st.cmpSel;
+    if (first && w && w.top1_work) return "가장 닮은 명화와";
+    if (first) return "가장 비슷한 명화와";
+    return "고른 명화와";
+  }
+
   // 새 화면 데이터(분석 결과·기록)를 받을 때 명화 선택·레이더 탭을 처음 상태로.
   function resetViewState() {
     st.cmpSel = 0;
@@ -1134,7 +1143,7 @@
           : "색과 선을 " + n + "가지로 재서 비교했어요.",
       }),
     ];
-    // 고른 명화의 특징이 있으면 "○○ 평균과"·"가장 닮은 명화와" 탭 (FR4.6). 없으면 탭을 숨긴다.
+    // 고른 명화의 특징이 있으면 "○○ 평균과"·명화 탭(workTabLabel) (FR4.6). 없으면 탭을 숨긴다.
     var w = selWork();
     var canWork = !!(w && w.radar && typeof w.radar === "object" && n >= 3);
     if (!canWork) st.whyMode = "avg";
@@ -1158,7 +1167,7 @@
           class: "g-tab",
           role: "tab",
           "data-testid": "g-tab-work",
-          text: "가장 닮은 명화와",
+          text: workTabLabel(w),
           on: {
             click: function () {
               setWhyMode("work");
