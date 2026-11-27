@@ -306,6 +306,23 @@ def display_name(name: str) -> str:
     return " ".join(w.capitalize() for w in name.split("-"))
 
 
+ARTIST_INFO_CSV = ARTIFACTS / "artists_info.csv"
+
+
+def load_artist_info(path: Path | str = ARTIST_INFO_CSV) -> dict:
+    """화가 소개를 {표시용 화가 이름: {"years", "nationality", "intro"}}로 돌려준다.
+    이름은 load_index()의 meta["artist"]와 같다. 파일이 없으면 빈 dict."""
+    path = Path(path)
+    if not path.exists():
+        log.warning("%s가 없어 화가 소개를 비워 둡니다.", path.name)
+        return {}
+    df = pd.read_csv(path, dtype=str, keep_default_na=False)
+    return {
+        r.artist: {"years": r.years, "nationality": r.nationality, "intro": r.intro}
+        for r in df.itertuples()
+    }
+
+
 def _read_index(d: Path) -> tuple[np.ndarray, pd.DataFrame]:
     """파일(또는 가짜 인덱스)에서 인덱스를 읽는다. 캐시는 load_index가 맡는다."""
     if not ((d / "embeddings.npy").exists() and (d / "meta.csv").exists()):

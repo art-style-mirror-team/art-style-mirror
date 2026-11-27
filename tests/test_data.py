@@ -163,6 +163,22 @@ def test_load_index_cache(tmp_path):
     assert len(D.load_index(tmp_path)["emb"]) == 5
 
 
+def test_artist_info_covers_index():
+    """실제 인덱스의 모든 화가에게 소개가 있고, 빈 칸이 없다."""
+    idx = D.load_index()
+    if idx["meta"].attrs["fake"]:
+        pytest.skip("실제 인덱스가 없는 환경")
+    info = D.load_artist_info()
+    assert set(idx["meta"]["artist"]) <= set(info)
+    for name, row in info.items():
+        assert all(row[k].strip() for k in ("years", "nationality", "intro")), name
+        assert len(row["intro"]) <= 120, name  # 화면에 한두 줄로 보이는 길이
+
+
+def test_artist_info_missing_file(tmp_path):
+    assert D.load_artist_info(tmp_path / "none.csv") == {}
+
+
 def _fake_text_embed(monkeypatch):
     """문장마다 고정된 무작위 단위벡터를 돌려주는 가짜 embed_text (모델 없이 로직만 검사)."""
 
