@@ -7,6 +7,7 @@ contracts/interfaces.md의 시그니처를 따른다.
   clip_keywords(emb, k=3)      # 이슈 #7에서 구현
 이미지는 모두 RGB np.ndarray(uint8).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -57,14 +58,33 @@ ARTIST_STYLE = {
     "Vincent van Gogh": "Post-Impressionism",
 }
 ARTISTS = list(ARTIST_STYLE)
-GENRES = ["landscape", "portrait", "still_life", "religious_painting", "sketch_and_study", "genre_painting"]
+GENRES = [
+    "landscape",
+    "portrait",
+    "still_life",
+    "religious_painting",
+    "sketch_and_study",
+    "genre_painting",
+]
 WORKS_PER_ARTIST = 20  # 가짜 인덱스: 14 train / 3 val / 3 test
 
 # clip_keywords() 스텁이 고르는 표현 (#7에서 반대 문장쌍 비교로 교체)
 KEYWORDS = [
-    "두꺼운 붓 자국", "소용돌이치는 하늘", "선명한 원색", "차분한 색조", "부드러운 빛",
-    "강한 명암 대비", "단순한 기하학 형태", "꿈같은 분위기", "섬세한 윤곽선", "평면적인 색면",
-    "야외 풍경", "인물 초상", "정물", "어두운 배경", "밝은 햇살",
+    "두꺼운 붓 자국",
+    "소용돌이치는 하늘",
+    "선명한 원색",
+    "차분한 색조",
+    "부드러운 빛",
+    "강한 명암 대비",
+    "단순한 기하학 형태",
+    "꿈같은 분위기",
+    "섬세한 윤곽선",
+    "평면적인 색면",
+    "야외 풍경",
+    "인물 초상",
+    "정물",
+    "어두운 배경",
+    "밝은 햇살",
 ]
 
 
@@ -84,32 +104,46 @@ def _unit(v: np.ndarray) -> np.ndarray:
 def _fake_index() -> tuple[np.ndarray, pd.DataFrame]:
     """artifacts 파일이 없을 때만 쓰는 가짜 인덱스 (화가 23명 × 20점). 평가·결과 보고에 쓰지 않는다."""
     rng = np.random.default_rng(_seed("index"))
-    dirs = _unit(np.random.default_rng(_seed("artist-directions")).normal(size=(len(ARTISTS), EMB_DIM)))
+    dirs = _unit(
+        np.random.default_rng(_seed("artist-directions")).normal(size=(len(ARTISTS), EMB_DIM))
+    )
     splits = ["train"] * 14 + ["val"] * 3 + ["test"] * 3
     embs, rows = [], []
     for a_idx, artist in enumerate(ARTISTS):
         for w in range(WORKS_PER_ARTIST):
             embs.append(dirs[a_idx] + 0.7 * _unit(rng.normal(size=EMB_DIM)))
             work_id = f"{a_idx:02d}{w:03d}"
-            rows.append({"id": work_id, "artist": artist, "style": ARTIST_STYLE[artist],
-                         "genre": GENRES[w % len(GENRES)],
-                         "path": f"data/wikiart/{artist.lower().replace(' ', '-')}_{work_id}.jpg",
-                         "split": splits[w]})
+            rows.append(
+                {
+                    "id": work_id,
+                    "artist": artist,
+                    "style": ARTIST_STYLE[artist],
+                    "genre": GENRES[w % len(GENRES)],
+                    "path": f"data/wikiart/{artist.lower().replace(' ', '-')}_{work_id}.jpg",
+                    "split": splits[w],
+                }
+            )
     emb = _unit(np.array(embs))
     emb.setflags(write=False)
     return emb, pd.DataFrame(rows, columns=["id", "artist", "style", "genre", "path", "split"])
 
 
 # ───────────────────────── 이슈 #3: 화가 선별 · 분할 ─────────────────────────
-def select_artists(df: pd.DataFrame, n: int = 23, min_count: int = 50,
-                   exclude: tuple[str, ...] = ("Unknown Artist", "Unknown")) -> list[str]:
+def select_artists(
+    df: pd.DataFrame,
+    n: int = 23,
+    min_count: int = 50,
+    exclude: tuple[str, ...] = ("Unknown Artist", "Unknown"),
+) -> list[str]:
     """작품 수가 많은 순으로 화가 n명을 고른다 (동률은 이름순, 항상 같은 결과)."""
     counts = df[~df["artist"].isin(exclude)]["artist"].value_counts()
     counts = counts[counts >= min_count]
     ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
     if len(ordered) < n:
-        raise ValueError(f"작품 {min_count}점 이상인 화가가 {len(ordered)}명뿐입니다 (필요 {n}명). "
-                         "--min-count를 낮추거나 데이터셋을 바꾸세요.")
+        raise ValueError(
+            f"작품 {min_count}점 이상인 화가가 {len(ordered)}명뿐입니다 (필요 {n}명). "
+            "--min-count를 낮추거나 데이터셋을 바꾸세요."
+        )
     return [name for name, _ in ordered[:n]]
 
 
@@ -117,7 +151,7 @@ def cap_per_artist(df: pd.DataFrame, max_per_artist: int | None, seed: int = SEE
     """화가당 최대 작품 수 제한 (임베딩 시간 단축). None이면 그대로."""
     if not max_per_artist:
         return df
-    shuffled = df.sample(frac=1.0, random_state=seed)          # 무작위 순서 (재현 가능)
+    shuffled = df.sample(frac=1.0, random_state=seed)  # 무작위 순서 (재현 가능)
     return shuffled.groupby("artist", sort=False).head(max_per_artist).sort_index()
 
 
@@ -153,7 +187,9 @@ def _l2(x: np.ndarray) -> np.ndarray:
 def _check_img(img) -> np.ndarray:
     arr = np.asarray(img)
     if arr.ndim != 3 or arr.shape[2] != 3 or arr.dtype != np.uint8:
-        raise ValueError(f"RGB uint8 (H,W,3) 이미지가 필요합니다. 받은 값: shape={arr.shape}, dtype={arr.dtype}")
+        raise ValueError(
+            f"RGB uint8 (H,W,3) 이미지가 필요합니다. 받은 값: shape={arr.shape}, dtype={arr.dtype}"
+        )
     return arr
 
 
@@ -164,7 +200,7 @@ def embed_images(imgs: list, batch_size: int = 64) -> np.ndarray:
     model, processor, device = _get_clip()
     out = []
     for i in range(0, len(imgs), batch_size):
-        batch = [_check_img(x) for x in imgs[i:i + batch_size]]
+        batch = [_check_img(x) for x in imgs[i : i + batch_size]]
         inputs = processor(images=batch, return_tensors="pt").to(device)
         with torch.no_grad():
             # get_image_features의 반환 형식이 transformers 버전마다 달라서 직접 계산한다.
@@ -173,7 +209,9 @@ def embed_images(imgs: list, batch_size: int = 64) -> np.ndarray:
         out.append(feats.float().cpu().numpy())
     emb = np.concatenate(out, axis=0) if out else np.zeros((0, EMB_DIM), np.float32)
     if emb.shape[-1] != EMB_DIM:
-        raise RuntimeError(f"임베딩 차원이 {emb.shape[-1]}입니다 (기대 {EMB_DIM}). transformers 버전/모델을 확인하세요.")
+        raise RuntimeError(
+            f"임베딩 차원이 {emb.shape[-1]}입니다 (기대 {EMB_DIM}). transformers 버전/모델을 확인하세요."
+        )
     return _l2(emb).astype(np.float32)
 
 
@@ -189,10 +227,13 @@ def embed_text(texts) -> np.ndarray:
     if isinstance(texts, str):
         texts = [texts]
     model, processor, device = _get_clip()
-    inputs = processor(text=list(texts), padding=True, truncation=True, return_tensors="pt").to(device)
+    inputs = processor(text=list(texts), padding=True, truncation=True, return_tensors="pt").to(
+        device
+    )
     with torch.no_grad():
-        pooled = model.text_model(input_ids=inputs["input_ids"],
-                                  attention_mask=inputs.get("attention_mask")).pooler_output
+        pooled = model.text_model(
+            input_ids=inputs["input_ids"], attention_mask=inputs.get("attention_mask")
+        ).pooler_output
         feats = model.text_projection(pooled)
     emb = feats.float().cpu().numpy()
     if emb.shape[-1] != EMB_DIM:
@@ -201,7 +242,10 @@ def embed_text(texts) -> np.ndarray:
 
 
 # ───────────────────────── 인덱스 읽기 ─────────────────────────
-_NAME_SPECIAL = {"pierre-auguste-renoir": "Pierre-Auguste Renoir", "vincent-van-gogh": "Vincent van Gogh"}
+_NAME_SPECIAL = {
+    "pierre-auguste-renoir": "Pierre-Auguste Renoir",
+    "vincent-van-gogh": "Vincent van Gogh",
+}
 
 
 def display_name(name: str) -> str:
@@ -214,27 +258,51 @@ def display_name(name: str) -> str:
     return " ".join(w.capitalize() for w in name.split("-"))
 
 
-def load_index(artifacts_dir: Path | str = ARTIFACTS) -> dict:
-    """{"emb": (N,512), "meta": DataFrame} 를 반환. 행 수와 모델 버전을 검사한다."""
-    d = Path(artifacts_dir)
+def _read_index(d: Path) -> tuple[np.ndarray, pd.DataFrame]:
+    """파일(또는 가짜 인덱스)에서 인덱스를 읽는다. 캐시는 load_index가 맡는다."""
     if not ((d / "embeddings.npy").exists() and (d / "meta.csv").exists()):
         # artifacts 파일이 없는 환경(CI 등)에서도 앱·테스트가 돌도록 가짜 인덱스로 대체한다.
-        log.warning("embeddings.npy·meta.csv가 없어 가짜 인덱스를 씁니다. 평가·결과 보고에는 쓰지 마세요.")
+        log.warning(
+            "embeddings.npy·meta.csv가 없어 가짜 인덱스를 씁니다. 평가·결과 보고에는 쓰지 마세요."
+        )
         emb, meta = _fake_index()
         meta = meta.copy()
-        meta.attrs["fake"] = True   # 확인: idx["meta"].attrs.get("fake")
-        return {"emb": emb, "meta": meta}
+        meta.attrs["fake"] = True  # 확인: idx["meta"].attrs.get("fake")
+        return emb, meta
     emb = np.load(d / "embeddings.npy")
     meta = pd.read_csv(d / "meta.csv", dtype={"id": str})
     meta["artist"] = meta["artist"].map(display_name)  # 'vincent-van-gogh' -> 'Vincent van Gogh'
     meta.attrs["fake"] = False
     if len(emb) != len(meta):
-        raise ValueError(f"embeddings 행 수({len(emb)}) != meta 행 수({len(meta)}). build_index.py를 다시 실행하세요.")
+        raise ValueError(
+            f"embeddings 행 수({len(emb)}) != meta 행 수({len(meta)}). build_index.py를 다시 실행하세요."
+        )
     ver = d / "clip_model.txt"
     if ver.exists() and ver.read_text().strip() != CLIP_MODEL_NAME:
-        raise ValueError(f"인덱스는 {ver.read_text().strip()}로 만들어졌지만 코드는 {CLIP_MODEL_NAME}를 씁니다. "
-                         "명화와 사용자 입력은 같은 CLIP 모델이어야 합니다.")
-    return {"emb": emb, "meta": meta}
+        raise ValueError(
+            f"인덱스는 {ver.read_text().strip()}로 만들어졌지만 코드는 {CLIP_MODEL_NAME}를 씁니다. "
+            "명화와 사용자 입력은 같은 CLIP 모델이어야 합니다."
+        )
+    return emb, meta
+
+
+@lru_cache(maxsize=4)
+def _cached_index(path: str, stamp: tuple) -> tuple[np.ndarray, pd.DataFrame]:
+    emb, meta = _read_index(Path(path))
+    emb.flags.writeable = False  # 캐시를 공유하므로 실수로 고치지 못하게 한다
+    return emb, meta
+
+
+def load_index(artifacts_dir: Path | str = ARTIFACTS) -> dict:
+    """{"emb": (N,512), "meta": DataFrame} 를 반환. 행 수와 모델 버전을 검사한다.
+    같은 파일이면 한 번만 읽고, meta는 복사본을 돌려준다(파일이 바뀌면 다시 읽는다)."""
+    d = Path(artifacts_dir)
+    stamp = tuple(
+        (f.stat().st_mtime_ns, f.stat().st_size) if f.exists() else None
+        for f in (d / "embeddings.npy", d / "meta.csv", d / "clip_model.txt")
+    )
+    emb, meta = _cached_index(str(d.resolve()), stamp)
+    return {"emb": emb, "meta": meta.copy()}
 
 
 # ───────────────────────── 이슈 #7 (미구현) ─────────────────────────

@@ -11,6 +11,7 @@ Colab(GPU) 사용 예:
 
 이미지(data/images)는 Git에 올리지 않는다. artifacts/의 meta.csv·embeddings.npy·clip_model.txt(약 14MB)만 커밋한다.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -22,10 +23,14 @@ import pandas as pd
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from modules import data as D  # noqa: E402
+from modules import data as D
 
 LONG_SIDE = 512
-COL_CANDIDATES = {"artist": ("artist", "artist_name"), "style": ("style", "movement"), "genre": ("genre",)}
+COL_CANDIDATES = {
+    "artist": ("artist", "artist_name"),
+    "style": ("style", "movement"),
+    "genre": ("genre",),
+}
 
 
 def _pick(cols, names):
@@ -82,7 +87,9 @@ def stage_meta(a) -> None:
     df["path"] = paths
 
     D.ARTIFACTS.mkdir(exist_ok=True)
-    df[["id", "artist", "style", "genre", "path", "split"]].to_csv(D.ARTIFACTS / "meta.csv", index=False)
+    df[["id", "artist", "style", "genre", "path", "split"]].to_csv(
+        D.ARTIFACTS / "meta.csv", index=False
+    )
     print(f"meta.csv 저장: {len(df)}점, 화가 {df['artist'].nunique()}명")
     print(df["split"].value_counts().to_string())
 
@@ -91,7 +98,7 @@ def stage_embed(a) -> None:
     meta = pd.read_csv(D.ARTIFACTS / "meta.csv", dtype={"id": str})
     chunks = []
     for s in range(0, len(meta), a.batch_size):
-        part = meta["path"].iloc[s:s + a.batch_size]
+        part = meta["path"].iloc[s : s + a.batch_size]
         imgs = [np.asarray(Image.open(p).convert("RGB"), dtype=np.uint8) for p in part]
         chunks.append(D.embed_images(imgs, batch_size=a.batch_size))
         print(f"  임베딩 {min(s + a.batch_size, len(meta))}/{len(meta)}")

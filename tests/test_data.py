@@ -6,7 +6,11 @@ from modules import data as D
 
 
 def _fake_df(n_artists=30, per=100):
-    rows = [{"artist": f"A{i:02d}", "style": "s", "genre": "g"} for i in range(n_artists) for _ in range(per)]
+    rows = [
+        {"artist": f"A{i:02d}", "style": "s", "genre": "g"}
+        for i in range(n_artists)
+        for _ in range(per)
+    ]
     return pd.DataFrame(rows)
 
 
@@ -23,7 +27,9 @@ def test_select_artists_too_few_raises():
 
 
 def test_select_artists_excludes_unknown():
-    df = pd.concat([_fake_df(3), pd.DataFrame({"artist": ["Unknown Artist"] * 500})], ignore_index=True)
+    df = pd.concat(
+        [_fake_df(3), pd.DataFrame({"artist": ["Unknown Artist"] * 500})], ignore_index=True
+    )
     assert "Unknown Artist" not in D.select_artists(df, n=3)
 
 
@@ -42,8 +48,16 @@ def test_display_name_and_idempotent():
 
 def test_load_index_uses_display_names(tmp_path):
     np.save(tmp_path / "embeddings.npy", np.zeros((2, 512), np.float32))
-    pd.DataFrame({"id": ["000001", "000002"], "artist": ["vincent-van-gogh", "rembrandt"],
-                  "style": "s", "genre": "g", "path": "p", "split": "train"}).to_csv(tmp_path / "meta.csv", index=False)
+    pd.DataFrame(
+        {
+            "id": ["000001", "000002"],
+            "artist": ["vincent-van-gogh", "rembrandt"],
+            "style": "s",
+            "genre": "g",
+            "path": "p",
+            "split": "train",
+        }
+    ).to_csv(tmp_path / "meta.csv", index=False)
     idx = D.load_index(tmp_path)
     assert list(idx["meta"]["artist"]) == ["Vincent van Gogh", "Rembrandt"]
     assert list(idx["meta"].columns) == ["id", "artist", "style", "genre", "path", "split"]
@@ -51,7 +65,7 @@ def test_load_index_uses_display_names(tmp_path):
 
 def test_team_constants_and_fake_fallback(tmp_path):
     assert len(D.ARTISTS) == 23 and len(set(D.ARTISTS)) == 23
-    idx = D.load_index(tmp_path)               # 빈 폴더 -> 가짜 인덱스
+    idx = D.load_index(tmp_path)  # 빈 폴더 -> 가짜 인덱스
     assert idx["meta"].attrs["fake"] is True
     assert idx["emb"].shape == (23 * D.WORKS_PER_ARTIST, 512)
     assert list(idx["meta"].columns) == ["id", "artist", "style", "genre", "path", "split"]
@@ -76,7 +90,11 @@ def test_split_ratio_and_stratified():
     df = D.split_dataframe(_fake_df(24, 100))
     assert set(df["split"]) == set(D.SPLIT_NAMES)
     frac = df["split"].value_counts(normalize=True)
-    assert abs(frac["train"] - 0.70) < 0.02 and abs(frac["val"] - 0.15) < 0.02 and abs(frac["test"] - 0.15) < 0.02
+    assert (
+        abs(frac["train"] - 0.70) < 0.02
+        and abs(frac["val"] - 0.15) < 0.02
+        and abs(frac["test"] - 0.15) < 0.02
+    )
     # 모든 화가가 세 split에 모두 존재
     assert (df.groupby("artist")["split"].nunique() == 3).all()
 
@@ -93,7 +111,7 @@ def test_split_reproducible_and_no_overlap():
 def clip_ready():
     try:
         D._get_clip()
-    except Exception as e:  # 모델 다운로드 불가 등
+    except Exception as e:  # noqa: BLE001 - 모델 다운로드 불가 등 원인이 다양해 모두 건너뜀 처리
         pytest.skip(f"CLIP 로드 불가: {e}")
 
 
@@ -118,3 +136,33 @@ def test_embed_text_shape_norm(clip_ready):
 def test_embed_image_rejects_bad_input(clip_ready):
     with pytest.raises(ValueError):
         D.embed_image(np.zeros((10, 10), dtype=np.uint8))
+
+
+def test_load_index_cache(tmp_path):
+    """같은 파일은 캐시에서 읽고, meta는 복사본이며, 파일이 바뀌면 다시 읽는다."""
+    import numpy as np
+    import pandas as pd
+
+    def write(n):
+        pd.DataFrame(
+            {
+                "id": [f"{i:06d}" for i in range(n)],
+                "artist": ["vincent-van-gogh"] * n,
+                "style": ["Post_Impressionism"] * n,
+                "genre": ["landscape"] * n,
+                "path": ["x.jpg"] * n,
+                "split": ["train"] * n,
+            }
+        ).to_csv(tmp_path / "meta.csv", index=False)
+        np.save(tmp_path / "embeddings.npy", np.ones((n, 512), dtype=np.float32))
+
+    write(3)
+    a = D.load_index(tmp_path)
+    b = D.load_index(tmp_path)
+    assert a["emb"] is b["emb"]  # 한 번만 읽음
+    assert a["meta"] is not b["meta"]  # meta는 호출마다 복사본
+    assert a["meta"].attrs["fake"] is False  # copy 후에도 fake 표시 유지
+    a["meta"].loc[0, "artist"] = "changed"
+    assert D.load_index(tmp_path)["meta"].loc[0, "artist"] == "Vincent van Gogh"
+    write(5)  # 파일이 바뀌면 다시 읽는다
+    assert len(D.load_index(tmp_path)["emb"]) == 5
