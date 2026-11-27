@@ -173,7 +173,8 @@ def test_build_view_mid_level_has_all_fields_and_is_json():
         "compare", "kind", "history_name",
     }  # fmt: skip
     json.dumps(view)  # 그대로 화면(JSON)으로 보낼 수 있어야 한다
-    assert view["level"] == {"label": "보통", "bars": 2, "note": explain.LEVEL_NOTE["보통"]}
+    note = explain.LEVEL_TEXT[(result["input_type"], "보통")]
+    assert view["level"] == {"label": "보통", "bars": 2, "note": note}
     assert view["low"] is None
     assert [t["rank"] for t in view["top3"]] == [1, 2, 3]
     assert [t["name_orig"] for t in view["top3"]] == [a for a, _ in result["top3"]]
@@ -190,7 +191,27 @@ def test_build_view_low_level_shows_both_views_separately():
     assert view["level"]["bars"] == 1
     assert [x["name_orig"] for x in view["low"]["clip"]] == [a for a, _ in result["p_clip_top"]]
     assert [x["name_orig"] for x in view["low"]["cv"]] == [a for a, _ in result["p_cv_top"]]
-    assert view["head"]["title"] == explain.LEVEL_NOTE["낮음"].rstrip(".")
+    assert view["head"]["title"] == explain.LEVEL_TEXT[(result["input_type"], "낮음")].rstrip(".")
+    assert view["level"]["note"] == ""  # 제목과 같은 문구를 배지에 되풀이하지 않는다
+
+
+@pytest.mark.parametrize("input_type", ["photo", "painting", "sketch"])
+@pytest.mark.parametrize("level", ["높음", "보통"])
+def test_build_view_level_note_matches_card_text(input_type, level):
+    """화면 배지 문구는 결과 카드(#22)의 9칸 문구와 같다."""
+    result = _with_level(_result(), level)
+    result["input_type"] = input_type
+    view = explain.build_view(result)
+    assert view["level"]["note"] == explain.LEVEL_TEXT[(input_type, level)]
+    card, _ = explain.render_card(result)
+    assert view["level"]["note"] in card
+
+
+def test_build_view_level_note_uses_default_for_unknown_type():
+    result = _with_level(_result(), "높음")
+    result["input_type"] = "webtoon"
+    view = explain.build_view(result)
+    assert view["level"]["note"] == explain.LEVEL_TEXT[(explain.DEFAULT_TYPE, "높음")]
 
 
 def test_build_view_sketch_radar_uses_five_line_features():
