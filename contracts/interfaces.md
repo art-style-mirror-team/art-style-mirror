@@ -19,6 +19,7 @@
 | `embed_text(texts) -> np.ndarray` | 문장 임베딩, shape `(n, 512)`, 각 행 L2 정규화. `texts`는 `list[str]` |
 | `load_index() -> dict` | `{"emb": (N, 512), "meta": DataFrame}`. meta 열은 순서대로 `id, artist, style, genre, path, split`, `split` ∈ `train / val / test`, 행 순서는 `emb`와 같다 |
 | `clip_keywords(emb, k=3) -> list[tuple]` | `[("두꺼운 붓 자국", 0.71), ...]` 길이 k, 점수 내림차순 |
+| `load_artist_info() -> dict` | `{artist: {"years", "nationality", "intro"}}`, 값은 모두 `str`. `artist`는 `load_index()`의 `meta["artist"]`와 같은 표시 이름. `artifacts/artists_info.csv`가 없으면 `{}` |
 
 ## B — `modules/classify.py` (홍예원)
 
@@ -62,6 +63,7 @@
 | `features` | `extract_features()` 결과 |
 | `top1_profile` | `load_profiles()[top1]` |
 | `comparison` | `compare()` 결과 |
+| `artist_info` | `load_artist_info()` 중 `top3` 화가만 고른 `{artist: {"years", "nationality", "intro"}}`. 소개가 없는 화가는 빠질 수 있다 |
 
 ## 1일차에 확인이 필요한 부분
 
