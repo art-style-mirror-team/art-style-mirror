@@ -46,6 +46,71 @@ LEVEL_NOTE = {
     "낮음": "뚜렷하게 닮은 화가가 없어요.",
 }
 DISCLAIMER = "픽셀 수치 기반의 통계적 해석이며 미술사적 평가가 아닙니다."
+
+# 화면용 화가 한글 이름: 원래 이름 → (전체 이름, 짧은 이름). 목록은 modules/data.py의 ARTIST_STYLE
+# 24명과 같다. 표에 없는 화가(#3에서 목록이 바뀌는 경우 등)는 원래 이름을 그대로 쓴다.
+ARTIST_KO = {
+    "Vincent van Gogh": ("빈센트 반 고흐", "반 고흐"),
+    "Claude Monet": ("클로드 모네", "모네"),
+    "Pierre-Auguste Renoir": ("피에르오귀스트 르누아르", "르누아르"),
+    "Paul Cezanne": ("폴 세잔", "세잔"),
+    "Paul Gauguin": ("폴 고갱", "고갱"),
+    "Edgar Degas": ("에드가 드가", "드가"),
+    "Camille Pissarro": ("카미유 피사로", "피사로"),
+    "Pablo Picasso": ("파블로 피카소", "피카소"),
+    "Henri Matisse": ("앙리 마티스", "마티스"),
+    "Wassily Kandinsky": ("바실리 칸딘스키", "칸딘스키"),
+    "Piet Mondrian": ("피트 몬드리안", "몬드리안"),
+    "Salvador Dali": ("살바도르 달리", "달리"),
+    "Rene Magritte": ("르네 마그리트", "마그리트"),
+    "Gustav Klimt": ("구스타프 클림트", "클림트"),
+    "Edvard Munch": ("에드바르 뭉크", "뭉크"),
+    "Rembrandt": ("렘브란트", "렘브란트"),
+    "Caravaggio": ("카라바조", "카라바조"),
+    "Albrecht Durer": ("알브레히트 뒤러", "뒤러"),
+    "Sandro Botticelli": ("산드로 보티첼리", "보티첼리"),
+    "Raphael": ("라파엘로", "라파엘로"),
+    "Katsushika Hokusai": ("가쓰시카 호쿠사이", "호쿠사이"),
+    "Andy Warhol": ("앤디 워홀", "워홀"),
+    "Ivan Aivazovsky": ("이반 아이바좁스키", "아이바좁스키"),
+    "Ivan Shishkin": ("이반 시시킨", "시시킨"),
+}
+# 화면용 화풍 한글 이름. modules/data.py ARTIST_STYLE의 화풍과 같다. 표에 없으면 원래 이름.
+STYLE_KO = {
+    "Post-Impressionism": "후기 인상주의",
+    "Impressionism": "인상주의",
+    "Cubism": "입체주의",
+    "Fauvism": "야수주의",
+    "Abstract Expressionism": "추상 표현주의",
+    "Minimalism": "미니멀리즘",
+    "Surrealism": "초현실주의",
+    "Art Nouveau": "아르누보",
+    "Expressionism": "표현주의",
+    "Baroque": "바로크",
+    "Northern Renaissance": "북유럽 르네상스",
+    "Early Renaissance": "초기 르네상스",
+    "High Renaissance": "전성기 르네상스",
+    "Ukiyo-e": "우키요에",
+    "Pop Art": "팝 아트",
+    "Romanticism": "낭만주의",
+    "Realism": "사실주의",
+}
+# 스케치 레이더에 쓰는 선 특징 5개. features.LINE_FEATURES와 같아야 한다(explain은 다른 모듈을
+# import하지 않으므로 여기에 따로 둔다. app.analyze도 스케치에서 이 5개만 대조한다).
+LINE_FEATURES_FOR_RADAR = (
+    "edge_density",
+    "direction",
+    "straight_ratio",
+    "roughness",
+    "stroke_length",
+)
+LEVEL_BARS = {"높음": 3, "보통": 2, "낮음": 1}
+SOURCE_NOTE = "명화 데이터는 WikiArt(비상업 연구용)예요."
+# 기록·명화 페이지에 보이는 입력 종류(흑백이면 스케치). 값은 기록 화면의 종류 칩과 같다.
+KIND_KO = {"photo": "사진", "painting": "그림", "sketch": "스케치"}
+KIND_NOTE = {"사진": "사진으로 인식", "그림": "그림으로 인식", "스케치": "스케치로 인식"}
+NO_MATCH_NAME = "닮은 화가 없음"
+PALETTE_LEN = 5
 _KO_FONT_CANDIDATES = [
     "Malgun Gothic",
     "AppleGothic",
@@ -263,3 +328,245 @@ def render_card(result: dict) -> tuple[str, Figure]:
     )
     lines.append(f"\n> {DISCLAIMER}")
     return "\n".join(lines), _radar(result["features"], result["top1_profile"], top1)
+
+
+# --- 화면(G안)용 데이터 — 계약 밖 보조 함수 (#37) ---------------------------------------
+
+
+def _artist_names(artist: str) -> tuple[str, str]:
+    """화가의 (한글 전체 이름, 한글 짧은 이름). 한글 이름표에 없으면 원래 이름을 그대로 쓴다."""
+    return ARTIST_KO.get(artist, (artist, artist))
+
+
+def _pct_int(p) -> int:
+    """확률(0~1)을 정수 %로. 수가 아니면 0."""
+    return round(float(p) * 100) if _finite_number(p) else 0
+
+
+def _named_pcts(ranked) -> list[dict]:
+    """[(화가, 확률), ...] → [{"name": 짧은 한글 이름, "name_orig": 원래 이름, "pct": 정수 %}]."""
+    return [
+        {"name": _artist_names(str(a))[1], "name_orig": str(a), "pct": _pct_int(p)}
+        for a, p in ranked
+    ]
+
+
+def _top1_style(result: dict, top1: str) -> str:
+    """1위 화가의 대표 화풍. 1위 화가의 비슷한 명화에 붙은 화풍을 먼저 쓰고, 없으면 CLIP 화풍 1위."""
+    for work in result.get("similar") or []:
+        if work.get("artist") == top1 and work.get("style"):
+            return str(work["style"])
+    styles = result.get("styles_top3") or []
+    return str(styles[0][0]) if styles else ""
+
+
+def _radar_view(result: dict, top1: str, top2: str | None) -> dict:
+    """레이더 좌표. 내 값과 1위 화가 평균을 0~1로 자른다(_radar_value 규칙). 스케치면 선 특징 5개만."""
+    feats = result.get("features") or {}
+    profile = result.get("top1_profile") or {}
+    comp = result.get("comparison") or {}
+    keys = LINE_FEATURES_FOR_RADAR if result.get("gray") else tuple(FEATURE_KO)
+    names = [f for f in keys if _finite_number(feats.get(f)) and _usable_stat(profile.get(f))]
+    near = [f for f in comp.get("why_top1", []) if f in names]
+    far = [f for f in comp.get("toward_top2", []) if f in names]
+    axes = [
+        {
+            "key": f,
+            "label": FEATURE_KO.get(f, f),
+            "mine": _radar_value(f, float(feats[f])),
+            "avg": _radar_value(f, float(profile[f][0])),
+            "near": f in near,
+            "far": f in far,
+        }
+        for f in names
+    ]
+    return {
+        "axes": axes,
+        "artist": _artist_names(top1)[1],
+        "artist2": _artist_names(top2)[1] if top2 else "",
+        "near": [FEATURE_KO.get(f, f) for f in near],
+        "far": [FEATURE_KO.get(f, f) for f in far],
+    }
+
+
+def _hex(color) -> str | None:
+    """[r, g, b](0~255) → "#rrggbb". 모양이 틀리면 None."""
+    if not isinstance(color, (list, tuple)) or len(color) != 3:
+        return None
+    if not all(_finite_number(c) for c in color):
+        return None
+    r, g, b = (min(255, max(0, round(float(c)))) for c in color)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _palette_hex(feats) -> list[str] | None:
+    """특징의 palette를 hex 5개로. 없거나 모양이 틀린 색이 있으면 None(화면이 그 칸을 숨긴다)."""
+    palette = feats.get("palette") if isinstance(feats, dict) else None
+    if not isinstance(palette, (list, tuple)) or not palette:
+        return None
+    out = [_hex(c) for c in list(palette)[:PALETTE_LEN]]
+    return out if all(out) else None
+
+
+def _kind(result: dict) -> str:
+    """기록·명화 페이지의 종류. 흑백이면 스케치, 아니면 input_type(모르면 사진)."""
+    if result.get("gray"):
+        return KIND_KO["sketch"]
+    return KIND_KO.get(result.get("input_type"), KIND_KO["photo"])
+
+
+def _work_view(work: dict, axes: list[dict], top1_short: str, low: bool) -> dict:
+    """명화 한 점의 화면용 값. 특징이 있으면 대표색 hex 5개와 레이더 값(색·선 페이지 축과 같은
+    축, 0~1)을 넣고, 내 값과 차이가 가장 작은 축 2개를 near, 가장 큰 축 2개를 far로 고른다."""
+    artist = str(work.get("artist") or "")
+    full, short = _artist_names(artist)
+    style = str(work.get("style") or "")
+    wid = str(work.get("id") or "")
+    top1_work = bool(work.get("top1_work")) and not low
+    feats = work.get("features") if isinstance(work.get("features"), dict) else None
+    image = work.get("image")
+    image = image if isinstance(image, str) and image.startswith("data:image/") else None
+
+    radar = None
+    near: list[str] = []
+    far: list[str] = []
+    if feats is not None and axes and all(_finite_number(feats.get(a["key"])) for a in axes):
+        radar = {a["key"]: _radar_value(a["key"], float(feats[a["key"]])) for a in axes}
+        gaps = sorted(axes, key=lambda a: (abs(a["mine"] - radar[a["key"]]), a["key"]))
+        near = [a["key"] for a in gaps[:2]]
+        far = [a["key"] for a in reversed(gaps) if a["key"] not in near][:2]
+
+    return {
+        "id": wid,
+        "artist": full,
+        "short": short,
+        "artist_orig": artist,
+        "label": f"{short} #{wid}" if wid else short,
+        "style": STYLE_KO.get(style, style),
+        "style_orig": style,
+        "pct": max(0, min(100, _pct_int(work.get("score")))),
+        "top1_work": top1_work,
+        "eyebrow": f"1위 화가 {top1_short}의 작품 중에서" if top1_work else "화가와 상관없이 고른",
+        "title": "가장 닮은 명화예요" if top1_work else "가장 비슷한 명화예요",
+        "image": image,
+        "palette": _palette_hex(feats),
+        "radar": radar,
+        "near_keys": near,
+        "far_keys": far,
+        "near": [FEATURE_KO.get(k, k) for k in near],
+        "far": [FEATURE_KO.get(k, k) for k in far],
+    }
+
+
+def _compare_view(result: dict, works, axes: list[dict], top1_short: str, low: bool):
+    """명화 페이지 값(FR7.4, FR8). works가 비어 있으면 None(화면이 명화 페이지를 숨긴다, FR8.9)."""
+    works = [w for w in (works or []) if isinstance(w, dict)]
+    if not works:
+        return None
+    items = [_work_view(w, axes, top1_short, low) for w in works]
+    kind = _kind(result)
+    return {
+        "eyebrow": items[0]["eyebrow"],
+        "title": items[0]["title"],
+        "kind_note": KIND_NOTE.get(kind, ""),
+        "mine_palette": _palette_hex(result.get("features")),
+        "works": items,
+    }
+
+
+def build_view(result: dict, works: list[dict] | None = None) -> dict:
+    """G안 화면에 필요한 값을 JSON으로 바꿀 수 있는 dict로 만든다. result와 works만 읽는다
+    (추가 계산 없음).
+
+    result 형식은 contracts/interfaces.md(app.analyze 반환)를 따른다. 화면은 result를 직접 읽지
+    않고 이 dict만 쓴다. 키: head, level, top3, views, low, radar, styles, keywords, metrics,
+    gray, disclaimer, source, compare, kind, history_name.
+
+    works는 app.py가 고른 명화 비교용 목록이다:
+    [{"id", "artist", "style", "score", "top1_work", "image": data URL | None,
+    "features": extract_features() 결과 | None}]. 비어 있으면 compare는 None.
+    """
+    top3 = list(result["top3"])
+    conf = result["confidence"]
+    level = conf["level"]
+    top1 = str(top3[0][0])
+    top2 = str(top3[1][0]) if len(top3) > 1 else None
+    full, short = _artist_names(top1)
+    style = _top1_style(result, top1)
+    low = level == "낮음"
+
+    clip_first = str(result["p_clip_top"][0][0]) if result["p_clip_top"] else ""
+    cv_first = str(result["p_cv_top"][0][0]) if result["p_cv_top"] else ""
+
+    if low:
+        title = LEVEL_NOTE["낮음"].rstrip(".")
+        sub = "두 관점의 결과를 따로 보여 드려요"
+    else:
+        title = full
+        sub = " · ".join(s for s in (top1, STYLE_KO.get(style, style)) if s)
+
+    radar = _radar_view(result, top1, top2)
+
+    return {
+        "head": {
+            "intro": TYPE_INTRO.get(result.get("input_type"), "이 이미지는"),
+            "title": title,
+            "sub": sub,
+            "name": full,
+            "short": short,
+            "name_orig": top1,
+            "style": STYLE_KO.get(style, style),
+            "style_orig": style,
+            "pct": _pct_int(top3[0][1]),
+        },
+        "level": {
+            "label": level,
+            "bars": LEVEL_BARS.get(level, 1),
+            "note": LEVEL_NOTE.get(level) or "결과가 뚜렷해요.",
+        },
+        "top3": [dict(rank=i, **item) for i, item in enumerate(_named_pcts(top3), 1)],
+        "views": {
+            "clip": _artist_names(clip_first)[1],
+            "cv": _artist_names(cv_first)[1],
+            "same": clip_first == cv_first,
+        },
+        "low": (
+            {"clip": _named_pcts(result["p_clip_top"]), "cv": _named_pcts(result["p_cv_top"])}
+            if low
+            else None
+        ),
+        "radar": radar,
+        "styles": [
+            {"name": STYLE_KO.get(str(s), str(s)), "name_orig": str(s), "pct": _pct_int(p)}
+            for s, p in result["styles_top3"]
+        ],
+        "keywords": [str(k) for k, _ in result["keywords"]],
+        "metrics": [
+            {
+                "label": "1·2위 차이",
+                "value": round(float(conf["margin"]), 2),
+                "note": "클수록 1위가 뚜렷해요",
+            },
+            {
+                "label": "엔트로피",
+                "value": round(float(conf["entropy"]), 2),
+                "note": "작을수록 결과가 모여요",
+            },
+            {
+                "label": "관점 차이 (JSD)",
+                "value": round(float(conf["jsd"]), 2),
+                "note": "작을수록 두 관점이 비슷해요",
+            },
+            {
+                "label": "데이터셋 유사도",
+                "value": round(float(conf["max_sim"]), 2),
+                "note": "가장 닮은 명화 기준",
+            },
+        ],
+        "gray": bool(result.get("gray")),
+        "disclaimer": DISCLAIMER,
+        "source": SOURCE_NOTE,
+        "compare": _compare_view(result, works, radar["axes"], short, low),
+        "kind": _kind(result),
+        "history_name": NO_MATCH_NAME if low else full,
+    }
