@@ -1,0 +1,1889 @@
+/* G안 글래스 화면 (#37, 담당 D). 360×780(Galaxy S24) 기준.
+   app.py가 이 파일을 gr.HTML의 head에 <style>로 넣는다. @keyframes는 컴포넌트 범위 CSS
+   (css_template은 "#id { ... }" 안에 중첩됨) 안에 둘 수 없어 전역 스타일로 싣고,
+   모든 선택자는 .g- 접두로 Gradio 기본 스타일과 겹치지 않게 한다. */
+
+html,
+body {
+  margin: 0;
+  background: #05070d;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+footer {
+  display: none !important;
+}
+
+/* --- 바탕 ---------------------------------------------------------------- */
+.g-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  background: #05070d;
+}
+.g-app {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(120% 80% at 50% 30%, #1c2740 0%, #0e1424 60%, #080b14 100%);
+  color: #14161c;
+  font-family: "Noto Sans KR", system-ui, -apple-system, "Malgun Gothic", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  /* 한국어를 단어(어절) 단위로 줄바꿈하고, 너무 긴 단어만 쪼갠다. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.g-app *,
+.g-app *::before,
+.g-app *::after {
+  box-sizing: border-box;
+}
+.g-app button {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.g-app button:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+.g-app svg {
+  display: block;
+}
+.g-app h1,
+.g-app h2,
+.g-app p,
+.g-app ol,
+.g-app ul {
+  margin: 0;
+  padding: 0;
+}
+.g-app ol,
+.g-app ul {
+  list-style: none;
+}
+.g-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.g-app [hidden] {
+  display: none !important;
+}
+/* 화면에는 안 보이고 키보드·화면 읽기 프로그램만 쓰는 버튼 (FR9.4) */
+.g-app .g-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 내 사진·카메라 배경. 결과 단계마다 위로 밀리고(색·선에서는 흐려짐) 시트 위로 사진이 보인다. */
+.g-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: calc(100% + 160px);
+  transform-origin: 50% 0;
+  transition:
+    transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 0.55s ease;
+}
+/* Gradio의 ".gradio-container-x img { height: auto }"보다 우선하도록 .g-app을 붙인다. */
+.g-app .g-video,
+.g-app .g-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.g-app[data-bg="camera"] .g-video,
+.g-app[data-bg="photo"] .g-photo {
+  opacity: 1;
+}
+.g-app[data-step="result"] .g-bg {
+  transform: translateY(-90px);
+}
+.g-app[data-step="why"] .g-bg {
+  transform: translateY(-60px) scale(1.12);
+  filter: blur(24px);
+}
+.g-app[data-step="more"] .g-bg {
+  transform: translateY(-150px);
+}
+.g-app[data-step="compare"] .g-bg {
+  transform: translateY(-60px) scale(1.12);
+  filter: blur(24px);
+}
+.g-app[data-step="history"] .g-bg {
+  filter: blur(26px);
+}
+.g-app[data-closing] .g-bg {
+  transform: none;
+  filter: none;
+}
+.g-shade {
+  position: absolute;
+  inset: 0;
+  background: #0a0c14;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.55s ease;
+}
+.g-app[data-step="loading"] .g-shade {
+  opacity: 0.18;
+}
+.g-app[data-step="why"] .g-shade {
+  opacity: 0.6;
+}
+.g-app[data-step="more"] .g-shade {
+  opacity: 0.1;
+}
+.g-app[data-step="compare"] .g-shade {
+  opacity: 0.66;
+}
+.g-app[data-step="history"] .g-shade {
+  opacity: 0.6;
+}
+.g-app[data-closing] .g-shade {
+  opacity: 0;
+}
+.g-topfade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 150px;
+  background: linear-gradient(180deg, rgba(8, 12, 24, 0.5), rgba(8, 12, 24, 0));
+  pointer-events: none;
+}
+
+/* --- 첫 화면 (FR1) ------------------------------------------------------- */
+.g-home {
+  position: absolute;
+  inset: 0;
+  color: #fff;
+  display: none;
+}
+.g-app[data-step="home"] .g-home {
+  display: block;
+}
+.g-mask {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.g-hole,
+.g-frame {
+  position: absolute;
+  top: 140px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: min(calc(100% - 64px), 296px);
+  aspect-ratio: 4 / 5;
+  border-radius: 24px;
+  pointer-events: none;
+}
+.g-hole {
+  box-shadow: 0 0 0 2000px rgba(8, 12, 24, 0.42);
+}
+.g-c {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border: 0 solid #fff;
+}
+.g-c.tl {
+  left: 0;
+  top: 0;
+  border-left-width: 3px;
+  border-top-width: 3px;
+  border-top-left-radius: 24px;
+}
+.g-c.tr {
+  right: 0;
+  top: 0;
+  border-right-width: 3px;
+  border-top-width: 3px;
+  border-top-right-radius: 24px;
+}
+.g-c.bl {
+  left: 0;
+  bottom: 0;
+  border-left-width: 3px;
+  border-bottom-width: 3px;
+  border-bottom-left-radius: 24px;
+}
+.g-c.br {
+  right: 0;
+  bottom: 0;
+  border-right-width: 3px;
+  border-bottom-width: 3px;
+  border-bottom-right-radius: 24px;
+}
+.g-hint {
+  position: absolute;
+  top: 20px;
+  left: 72px;
+  right: 72px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.g-pill {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: rgba(12, 16, 28, 0.42);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.g-dock {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 48px;
+  height: 116px;
+  border-radius: 36px;
+  background: rgba(255, 255, 255, 0.16);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  padding: 0 22px;
+}
+.g-app .g-album {
+  justify-self: start;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.g-app .g-shutter {
+  justify-self: center;
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  border: 4px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.g-app .g-histbtn {
+  justify-self: end;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.g-shutter > span {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+.g-shutter:active > span {
+  transform: scale(0.92);
+}
+.g-note {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 첫 화면 차례로 나타나기: 어둡게 → 틀 → 안내 띠 → 도크 → 셔터 (약 0.8초, FR1.8) */
+.g-home.g-intro .g-mask {
+  animation: giFade 0.5s ease 0.05s both;
+}
+.g-home.g-intro .g-frame {
+  animation: giFrame 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) 0.12s both;
+}
+.g-home.g-intro .g-hint {
+  animation: giDrop 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s both;
+}
+.g-home.g-intro .g-dock {
+  animation: giUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.28s both;
+}
+.g-home.g-intro .g-shutter {
+  animation: giPop 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) 0.35s both;
+}
+.g-home.g-intro .g-note {
+  animation: giFade 0.5s ease 0.4s both;
+}
+@keyframes giFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes giFrame {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes giDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes giUp {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes giPop {
+  from {
+    transform: scale(0.82);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* --- 왼쪽 위 아이콘·진행 막대 ---------------------------------------------- */
+.g-app .g-logo {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  z-index: 3;
+  transition: opacity 0.3s ease;
+}
+.g-logo svg {
+  filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.35));
+}
+.g-app:not([data-step="home"]):not([data-step="loading"]):not([data-step="history"]) .g-logo,
+.g-app[data-closing] .g-logo {
+  opacity: 0;
+  pointer-events: none;
+}
+.g-nav {
+  position: absolute;
+  top: 6px;
+  left: 16px;
+  right: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  z-index: 2;
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+/* 명화가 없으면 "명화"를 숨기고 3단계 (FR8.9) */
+.g-nav[data-segs="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.g-app[data-step="home"] .g-nav,
+.g-app[data-step="loading"] .g-nav,
+.g-app[data-step="history"] .g-nav,
+.g-app[data-closing] .g-nav {
+  opacity: 0;
+  pointer-events: none;
+}
+.g-app .g-seg {
+  height: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  color: #fff;
+}
+.g-seg-bar {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.38);
+  overflow: hidden;
+}
+.g-seg-bar > span {
+  display: block;
+  height: 3px;
+  width: 0;
+  background: #fff;
+  transition: width 0.45s ease;
+}
+.g-seg[data-fill] .g-seg-bar > span {
+  width: 100%;
+}
+.g-seg-label {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.85;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.g-seg[aria-current="step"] .g-seg-label {
+  font-weight: 700;
+  opacity: 1;
+}
+
+/* --- 흰 시트 (FR6) -------------------------------------------------------- */
+.g-sheet {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  top: calc(100% - 380px);
+  border-radius: 32px;
+  background: rgba(250, 250, 252, 0.95);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 24px 60px rgba(8, 12, 24, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  padding: 10px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: none;
+  transition:
+    top 0.5s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.45s cubic-bezier(0.4, 0, 0.6, 1);
+}
+/* 시트 높이: 780px 화면에서 위쪽 끝이 분석 중 400·결과 292·색·선 60·화풍 112px */
+.g-app[data-step="result"] .g-sheet {
+  top: max(56px, calc(100% - 488px));
+}
+.g-app[data-step="why"] .g-sheet {
+  top: max(56px, calc(100% - 720px));
+}
+.g-app[data-step="more"] .g-sheet {
+  top: max(56px, calc(100% - 668px));
+}
+/* 명화 352px(위쪽에 두 그림), 기록 64px */
+.g-app[data-step="compare"] .g-sheet {
+  top: max(56px, calc(100% - 428px));
+}
+.g-app[data-step="history"] .g-sheet {
+  top: 64px;
+  background: #f8f8fa;
+}
+.g-app[data-step="home"] .g-sheet,
+.g-app[data-closing] .g-sheet {
+  transform: translateY(calc(100% + 16px));
+  pointer-events: none;
+}
+.g-sheet.g-dragging {
+  transition: top 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.g-handle {
+  flex-shrink: 0;
+  margin: -10px -20px 0;
+  height: 34px;
+  padding-top: 10px;
+  display: flex;
+  justify-content: center;
+  touch-action: none;
+  cursor: grab;
+}
+.g-handle > span {
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(20, 22, 28, 0.25);
+}
+.g-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.g-pane::-webkit-scrollbar {
+  display: none;
+}
+.g-pane.in-next {
+  animation: gPaneNext 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.g-pane.in-prev {
+  animation: gPanePrev 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes gPaneNext {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes gPanePrev {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* 위에서부터 0.08초 간격으로 나타나기 (FR6.2) */
+.g-pane > * {
+  flex-shrink: 0;
+  animation: gRise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.g-pane > :nth-child(1) {
+  animation-delay: 0.05s;
+}
+.g-pane > :nth-child(2) {
+  animation-delay: 0.13s;
+}
+.g-pane > :nth-child(3) {
+  animation-delay: 0.21s;
+}
+.g-pane > :nth-child(4) {
+  animation-delay: 0.29s;
+}
+.g-pane > :nth-child(5) {
+  animation-delay: 0.37s;
+}
+.g-pane > :nth-child(6) {
+  animation-delay: 0.45s;
+}
+.g-pane > :nth-child(7) {
+  animation-delay: 0.53s;
+}
+.g-pane > :nth-child(8) {
+  animation-delay: 0.61s;
+}
+.g-pane > :nth-child(9) {
+  animation-delay: 0.69s;
+}
+.g-pane > :nth-child(10) {
+  animation-delay: 0.77s;
+}
+/* 색·선 페이지: 레이더가 다 그려진 뒤 아래 정보가 나타난다 (FR4.3). 탭이 있으면 자식 순서가
+   바뀌므로 순번 대신 g-after1~4 클래스로 정한다. 탭을 바꿀 때 새로 넣은 요소도 같은 지연으로 뜬다. */
+.g-pane.g-why > .g-after1 {
+  animation-delay: 1.7s;
+}
+.g-pane.g-why > .g-after2 {
+  animation-delay: 1.8s;
+}
+.g-pane.g-why > .g-after3 {
+  animation-delay: 1.9s;
+}
+.g-pane.g-why > .g-after4 {
+  animation-delay: 2s;
+}
+/* 이미 본 레이더 탭으로 돌아갈 때와 기록 목록을 다시 그릴 때는 움직임 없이 바로 보인다 (FR4.7) */
+.g-pane > .g-now,
+.g-pane.g-static > * {
+  animation: none;
+}
+@keyframes gRise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.g-spacer {
+  flex: 1 1 auto !important;
+  min-height: 16px;
+}
+
+/* --- 공통 글자·버튼 ------------------------------------------------------- */
+.g-eyebrow {
+  margin-top: 14px !important;
+  font-size: 13px;
+  color: #4a4f5c;
+}
+.g-app .g-title {
+  margin-top: 14px !important;
+  font-family: "Noto Serif KR", "Batang", serif;
+  font-size: 22px;
+  line-height: 1.35;
+  font-weight: 700;
+}
+/* Gradio의 ".gradio-container-x h1 { font-size: inherit }"보다 우선하도록 .g-app을 붙인다. */
+.g-app .g-headline {
+  margin-top: 4px !important;
+  font-family: "Noto Serif KR", "Batang", serif;
+  font-size: 30px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.g-app .g-headline.g-low {
+  font-size: 26px;
+}
+.g-sub {
+  margin-top: 4px !important;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #4a4f5c;
+}
+.g-small {
+  font-size: 12px;
+  line-height: 1.55;
+  color: #575d6b;
+}
+.g-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+}
+.g-app .g-btn {
+  height: 52px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.g-app .g-btn-ghost {
+  flex: 0 0 auto;
+  min-width: 96px;
+  padding: 0 14px;
+  background: rgba(20, 22, 28, 0.07);
+  color: #14161c;
+}
+.g-app .g-btn-main {
+  flex: 1;
+  min-width: 0;
+  padding: 0 12px;
+  background: #14161c;
+  color: #fff;
+}
+
+/* --- 분석 중 (FR2) -------------------------------------------------------- */
+.g-steps {
+  margin-top: 16px !important;
+  display: flex;
+  flex-direction: column;
+}
+.g-step {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+}
+.g-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.g-mk {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2.5px solid #9ba1ad;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease;
+}
+.g-mk svg {
+  display: none;
+}
+.g-mk > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+}
+.g-ln {
+  flex: 1;
+  width: 2px;
+  min-height: 10px;
+  margin: 3px 0;
+  background: #d5d8de;
+  transition: background 0.3s ease;
+}
+.g-step:last-child .g-ln {
+  display: none;
+}
+.g-step-body {
+  padding-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.g-step-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.g-step-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #575d6b;
+}
+.g-step-state {
+  font-size: 12px;
+  font-weight: 700;
+  color: #575d6b;
+}
+.g-step-detail {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #575d6b;
+}
+.g-step[data-state="done"] .g-mk {
+  border-color: #14161c;
+  background: #14161c;
+}
+.g-step[data-state="done"] .g-mk svg {
+  display: block;
+}
+.g-step[data-state="done"] .g-ln {
+  background: #14161c;
+}
+.g-step[data-state="now"] .g-mk {
+  border-color: #14161c;
+}
+.g-step[data-state="now"] .g-mk > i {
+  background: #14161c;
+  animation: gPulse 1.1s ease-in-out infinite;
+}
+.g-step[data-state="done"] .g-step-name,
+.g-step[data-state="now"] .g-step-name,
+.g-step[data-state="now"] .g-step-state {
+  color: #14161c;
+}
+.g-step[data-state="done"] .g-step-state {
+  color: #4a4f5c;
+  font-weight: 500;
+}
+@keyframes gPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.55);
+  }
+}
+
+/* --- 결과 (FR3) ----------------------------------------------------------- */
+.g-score {
+  margin-top: 14px !important;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.g-num {
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.g-app .g-num small {
+  font-size: 20px;
+}
+.g-vr {
+  width: 1px;
+  height: 36px;
+  background: #d5d8de;
+}
+.g-level {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.g-chip {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #ecedf0;
+  color: #14161c;
+  --g-bar-off: #c9ccd3;
+}
+.g-chip[data-level="높음"] {
+  background: #e8f5ee;
+  color: #166534;
+  --g-bar-off: #bfe3cc;
+}
+.g-chip[data-level="낮음"] {
+  background: #fff1e8;
+  color: #9a3412;
+  --g-bar-off: #f3c9ae;
+}
+.g-bars {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+}
+.g-bars > i {
+  width: 4px;
+  border-radius: 2px;
+  background: var(--g-bar-off);
+}
+.g-bars > i:nth-child(1) {
+  height: 7px;
+}
+.g-bars > i:nth-child(2) {
+  height: 10px;
+}
+.g-bars > i:nth-child(3) {
+  height: 13px;
+}
+.g-bars > i[data-on] {
+  background: currentColor;
+}
+.g-level-note {
+  font-size: 13px;
+  color: #4a4f5c;
+}
+.g-top3 {
+  margin-top: 14px !important;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.g-top3 > li {
+  height: 58px;
+  border-radius: 16px;
+  background: rgba(20, 22, 28, 0.06);
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+}
+.g-top3 > li:first-child {
+  background: #14161c;
+  color: #fff;
+}
+.g-top3 .g-rank {
+  font-size: 12px;
+  color: #4a4f5c;
+}
+.g-top3 > li:first-child .g-rank {
+  color: #d5d8de;
+}
+.g-top3 .g-name {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.g-box {
+  margin-top: 12px !important;
+  border-radius: 16px;
+  background: rgba(20, 22, 28, 0.05);
+  padding: 12px 14px;
+}
+.g-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.g-two > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.g-cap {
+  font-size: 12px;
+  color: #575d6b;
+}
+.g-strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+.g-same {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+.g-lowcols {
+  margin-top: 14px !important;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.g-lowcol {
+  border-radius: 16px;
+  background: rgba(20, 22, 28, 0.05);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.g-lowcol > b {
+  font-size: 12px;
+  color: #4a4f5c;
+}
+.g-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 14px;
+}
+.g-row > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.g-row > span:last-child {
+  font-weight: 700;
+}
+/* p 초기화(.g-app p { padding: 0 })보다 우선하도록 .g-app을 붙인다. */
+.g-app .g-tip {
+  margin-top: 10px !important;
+  border-radius: 14px;
+  background: #fff1e8;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #7c2d12;
+}
+
+/* --- 색·선 레이더 (FR4) ---------------------------------------------------- */
+.g-radar {
+  margin-top: 8px;
+  align-self: center;
+  width: 100%;
+  max-width: 304px;
+  height: auto;
+}
+.rl {
+  fill: #4a4f5c;
+  font-weight: 500;
+}
+.rl-near {
+  fill: #1d4ed8;
+  font-weight: 700;
+}
+.rl-far {
+  fill: #c2410c;
+  font-weight: 700;
+}
+.g-radar.intro .cmp-poly {
+  transform-origin: 156px 124px;
+  animation: gGrow 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.35s both;
+}
+.g-radar.intro .me-poly {
+  stroke-dasharray: 1;
+  animation:
+    gDraw 0.8s ease-in-out 0.6s both,
+    gFill 0.4s ease 1.3s both;
+}
+.g-radar.intro .me-dot {
+  animation: gShow 0.3s ease 1.3s both;
+}
+.g-radar.intro .rl-near {
+  animation: gNear 0.45s ease 1.5s both;
+}
+.g-radar.intro .rl-far {
+  animation: gFar 0.45s ease 1.5s both;
+}
+@keyframes gGrow {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes gDraw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes gFill {
+  from {
+    fill-opacity: 0;
+  }
+  to {
+    fill-opacity: 0.16;
+  }
+}
+@keyframes gShow {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes gNear {
+  0% {
+    fill: #4a4f5c;
+    font-weight: 500;
+  }
+  49% {
+    font-weight: 500;
+  }
+  50% {
+    font-weight: 700;
+  }
+  100% {
+    fill: #1d4ed8;
+    font-weight: 700;
+  }
+}
+@keyframes gFar {
+  0% {
+    fill: #4a4f5c;
+    font-weight: 500;
+  }
+  49% {
+    font-weight: 500;
+  }
+  50% {
+    font-weight: 700;
+  }
+  100% {
+    fill: #c2410c;
+    font-weight: 700;
+  }
+}
+.g-legend {
+  margin-top: 6px;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  font-size: 13px;
+  color: #4a4f5c;
+}
+.g-legend > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.g-cards {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.g-card {
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.g-card > b {
+  font-size: 12px;
+  line-height: 1.45;
+}
+.g-card > span {
+  font-size: 15px;
+  font-weight: 700;
+}
+.g-card.near {
+  background: #eef3ff;
+}
+.g-card.near > b {
+  color: #1d4ed8;
+}
+.g-card.far {
+  background: #fff3eb;
+}
+.g-card.far > b {
+  color: #c2410c;
+}
+
+/* --- 화풍 (FR5) ----------------------------------------------------------- */
+.g-styles {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.g-style {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.g-style-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.g-style-top > em {
+  flex: 1;
+  min-width: 0;
+  font-style: normal;
+  font-size: 12px;
+  color: #575d6b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.g-style:first-child .g-style-top {
+  font-weight: 700;
+}
+.g-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #e2e4e9;
+  overflow: hidden;
+}
+.g-track > i {
+  display: block;
+  height: 6px;
+  width: 0;
+  border-radius: 3px;
+  background: #9ba1ad;
+}
+.g-style:first-child .g-track > i {
+  background: #1d4ed8;
+}
+.g-block {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.g-block > b {
+  font-size: 13px;
+}
+.g-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.g-chips > span {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 17px;
+  background: rgba(20, 22, 28, 0.06);
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+.g-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.g-metrics > span {
+  border-radius: 14px;
+  background: rgba(20, 22, 28, 0.045);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.g-metrics .g-m-label {
+  font-size: 12px;
+  color: #4a4f5c;
+}
+.g-metrics .g-m-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.g-metrics .g-m-note {
+  font-size: 12px;
+  color: #575d6b;
+}
+
+/* --- 명화 (FR8) ----------------------------------------------------------- */
+/* 시트 위쪽: 머리말·제목·두 그림·유사도 배지. 명화 단계에서만 보인다. */
+.g-cmp-top {
+  position: absolute;
+  top: 62px;
+  left: 16px;
+  right: 16px;
+  z-index: 1;
+  color: #fff;
+  opacity: 0;
+  transform: translateY(24px);
+  pointer-events: none;
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.g-app[data-step="compare"]:not([data-closing]) .g-cmp-top {
+  opacity: 1;
+  transform: none;
+}
+.g-app .g-cmp-eyebrow {
+  margin: 0 4px !important;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.88);
+}
+.g-app .g-cmp-title {
+  margin: 2px 4px 0 !important;
+  font-family: "Noto Serif KR", "Batang", serif;
+  font-size: 24px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: #fff;
+}
+.g-cmp-pics {
+  position: relative;
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.g-cmp-pic {
+  display: block;
+  height: 170px;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+/* Gradio의 img { height: auto }보다 우선하도록 .g-app을 붙인다. */
+.g-app .g-cmp-pic img,
+.g-app .g-thumb-pic img,
+.g-app .g-hthumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+}
+/* 명화 파일이 없을 때 화가 이름 카드 (FR8.3) */
+.g-noimg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  text-align: center;
+  background: linear-gradient(160deg, #3b4a6b 0%, #1f2738 100%);
+  color: #fff;
+  font-family: "Noto Serif KR", "Batang", serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.g-badge {
+  position: absolute;
+  left: 50%;
+  top: 51px;
+  width: 68px;
+  height: 68px;
+  margin-left: -34px;
+  border-radius: 50%;
+  background: rgba(250, 250, 252, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  color: #14161c;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 0.35s ease,
+    transform 0.45s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.g-badge[data-show] {
+  opacity: 1;
+  transform: none;
+}
+.g-badge > b {
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.g-badge > span {
+  font-size: 12px;
+  line-height: 1.2;
+  color: #4a4f5c;
+}
+.g-cmp-caps {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.g-cmp-caps > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 0 4px;
+}
+.g-cmp-caps b {
+  font-size: 14px;
+  font-weight: 700;
+}
+.g-cmp-caps span > span {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.88);
+}
+.g-sim {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.g-sim-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.g-sim-top > b {
+  font-size: 13px;
+  font-weight: 700;
+}
+.g-sim-num {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.g-track.g-track-8,
+.g-track.g-track-8 > i {
+  height: 8px;
+  border-radius: 4px;
+}
+.g-track.g-track-8 > i {
+  background: #14161c;
+}
+.g-pal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.g-pal-name {
+  width: 48px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #4a4f5c;
+}
+.g-swatches {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+}
+.g-swatches > span {
+  flex: 1;
+  height: 26px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(20, 22, 28, 0.08);
+}
+.g-thumbs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.g-app .g-thumb {
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.g-thumb-ring {
+  display: block;
+  width: 64px;
+  height: 52px;
+  padding: 2px;
+  border-radius: 13px;
+  border: 2px solid #e2e4e9;
+  transition: border-color 0.25s ease;
+}
+.g-thumb[aria-pressed="true"] .g-thumb-ring {
+  border-color: #14161c;
+}
+.g-thumb-pic {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 9px;
+}
+.g-thumb-pic.g-noimg {
+  display: flex;
+  padding: 2px;
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 11px;
+}
+.g-thumb-cap {
+  max-width: 100%;
+  font-size: 12px;
+  color: #4a4f5c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.g-thumb[aria-pressed="true"] .g-thumb-cap {
+  color: #14161c;
+  font-weight: 700;
+}
+
+/* 색·선 레이더 탭 "○○ 평균"·"이 명화" (FR4.6) */
+.g-tabs {
+  margin-top: 14px;
+  height: 52px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(20, 22, 28, 0.06);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+.g-app .g-tab {
+  min-width: 0;
+  padding: 0 8px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: #4a4f5c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    background 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.g-app .g-tab[aria-selected="true"] {
+  background: #fff;
+  color: #14161c;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(20, 22, 28, 0.16);
+}
+
+/* --- 기록 (FR9) ----------------------------------------------------------- */
+.g-hhead {
+  margin-top: 12px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.g-app .g-hhead .g-title {
+  margin-top: 0 !important;
+  font-size: 23px;
+}
+.g-hcount {
+  font-size: 13px;
+  color: #4a4f5c;
+}
+.g-hchips {
+  margin-top: 12px;
+  display: flex;
+  gap: 6px;
+}
+.g-app .g-hchip {
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  background: rgba(20, 22, 28, 0.06);
+  color: #14161c;
+}
+.g-app .g-hchip[aria-selected="true"] {
+  background: #14161c;
+  color: #fff;
+  font-weight: 700;
+}
+.g-hlist {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.g-app .g-hday {
+  margin: 14px 0 2px !important;
+  font-size: 13px;
+  font-weight: 700;
+  color: #4a4f5c;
+}
+.g-hrow {
+  position: relative;
+  overflow: hidden;
+  max-height: 80px;
+  border-bottom: 1px solid #ecedf0;
+  transition:
+    max-height 0.26s ease 0.2s,
+    opacity 0.2s ease 0.2s;
+}
+.g-hrow[data-removing] {
+  max-height: 0;
+  opacity: 0;
+}
+.g-hdel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0 22px;
+  background: #6b7280;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 0.15s ease;
+}
+.g-hrow[data-dir="right"] .g-hdel {
+  justify-content: flex-start;
+}
+.g-hrow[data-armed] .g-hdel {
+  background: #d92d20;
+}
+.g-app .g-hitem {
+  position: relative;
+  width: 100%;
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f8f8fa;
+  color: #14161c;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.g-hrow[data-dragging] .g-hitem {
+  transition: none;
+}
+.g-hthumb {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(160deg, #3b4a6b 0%, #1f2738 100%);
+}
+.g-hbody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.g-hname {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.g-hmeta {
+  font-size: 13px;
+  color: #575d6b;
+}
+.g-hside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.g-hpct {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.g-hlevel {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: #ecedf0;
+  color: #14161c;
+}
+.g-hlevel[data-level="높음"] {
+  background: #e8f5ee;
+  color: #166534;
+}
+.g-hlevel[data-level="낮음"] {
+  background: #fff1e8;
+  color: #9a3412;
+}
+.g-hfoot {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.g-app .g-hclear {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #b42318;
+  white-space: nowrap;
+}
+.g-hempty {
+  flex: 1 1 auto !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  min-height: 240px;
+}
+.g-hempty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 22px;
+  background: rgba(20, 22, 28, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.g-hempty > b {
+  font-size: 17px;
+  font-weight: 700;
+}
+.g-hempty > span:last-child {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #4a4f5c;
+}
+
+/* 되돌리기 (FR9.3) */
+.g-undo {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 28px;
+  z-index: 4;
+  height: 52px;
+  padding: 0 8px 0 18px;
+  border-radius: 16px;
+  background: #14161c;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  font-size: 14px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease,
+    visibility 0s linear 0.25s;
+}
+.g-undo[data-show] {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+.g-app .g-undo-btn {
+  min-height: 44px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fbe3a6;
+}
+
+/* 모두 지우기 확인 창 (FR9.5) */
+.g-dlg-back {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  background: rgba(8, 10, 16, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+}
+.g-dlg {
+  width: 100%;
+  max-width: 296px;
+  border-radius: 24px;
+  background: #fff;
+  padding: 24px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+.g-app .g-dlg-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+.g-app .g-dlg-body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #4a4f5c;
+}
+.g-dlg-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+.g-app .g-dlg-btn {
+  flex: 1;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(20, 22, 28, 0.07);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #14161c;
+}
+.g-app .g-dlg-btn.g-dlg-danger {
+  background: #d92d20;
+  color: #fff;
+}
+
+/* --- 한 줄 알림 (FR2.5) --------------------------------------------------- */
+.g-toast {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 68px;
+  z-index: 5;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(20, 22, 28, 0.92);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+.g-toast[data-show] {
+  opacity: 1;
+  transform: none;
+}
+
+/* --- 여백 보조 클래스 (시안의 margin-top 값) ------------------------------------ */
+.g-mt2 {
+  margin-top: 2px !important;
+}
+.g-mt8 {
+  margin-top: 8px !important;
+}
+.g-mt10 {
+  margin-top: 10px !important;
+}
+.g-mt12 {
+  margin-top: 12px !important;
+}
+.g-mt14 {
+  margin-top: 14px !important;
+}
+
+/* --- 애니메이션 줄이기 (NFR3): 움직임 없이 최종 상태를 바로 보인다 ---------------- */
+@media (prefers-reduced-motion: reduce) {
+  .g-app *,
+  .g-app *::before,
+  .g-app *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
