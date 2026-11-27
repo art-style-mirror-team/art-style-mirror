@@ -23,14 +23,16 @@ if str(ROOT) not in sys.path:
 
 from modules.data import display_name
 from modules.features import (
+    COLOR_FEATURES,
+    LINE_FEATURES,
     LONG_SIDE,
-    NUMERIC_FEATURES,
     extract_features,
     is_grayscale,
 )
 
 META_PATH = ROOT / "artifacts" / "meta.csv"
 PROFILES_PATH = ROOT / "artifacts" / "profiles.json"
+MIN_COLOR_SAMPLES = 5
 
 
 def _resize_long_side(img: np.ndarray, long_side: int = LONG_SIDE) -> np.ndarray:
@@ -65,24 +67,85 @@ def _load_rgb_image(image_path: Path) -> np.ndarray:
 
 def compute_profiles(
     samples: Iterable[tuple[str, np.ndarray]],
+    *,
+    min_color_samples: int = MIN_COLOR_SAMPLES,
+    progress_every: int | None = None,
 ) -> dict[str, dict[str, list[float]]]:
-    """(artist, rgb_img) 쌍들을 받아 {artist: {feature: [mean, std]}}를 계산한다."""
-    grouped: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    """(artist, rgb_img) 쌍들을 받아 {artist: {feature: [mean, std]}}를 계산한다.
+
+    집계 규칙:
+    - 선 5종(LINE_FEATURES)은 흑백·컬러를 포함한 모든 작품으로 집계한다.
+    - 색 5종(COLOR_FEATURES, palette 제외)은 is_grayscale() == False인 컬러 작품만으로 집계한다.
+    - 컬러 작품이 min_color_samples(기본 5장) 미만인 화가 처리 규칙:
+      * 1~(min_color_samples - 1)장: 평균은 해당 화가의 컬러 작품으로 계산하고,
+        표준편차는 소표본 편향을 막기 위해 화가 컬러 표준편차와 전체 컬러 표준편차 중 큰 값을 사용한다.
+      * 0장: 전체 학습셋 컬러 작품의 [mean, std]로 폴백한다.
+    """
+    line_grouped: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    color_grouped: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    global_color: dict[str, list[float]] = defaultdict(list)
+    all_color_fallback: dict[str, list[float]] = defaultdict(list)
+
+    total_count = 0
+    gray_count = 0
 
     for artist, img in samples:
+        total_count += 1
         name = display_name(artist.strip())
         resized = _resize_long_side(img)
         gray = is_grayscale(resized)
+        if gray:
+            gray_count += 1
+
         feats = extract_features(resized, gray=gray)
-        for feat in NUMERIC_FEATURES:
-            grouped[name][feat].append(float(feats[feat]))
+        for feat in LINE_FEATURES:
+            line_grouped[name][feat].append(float(feats[feat]))
+
+        for feat in COLOR_FEATURES:
+            val = float(feats[feat])
+            all_color_fallback[feat].append(val)
+            if not gray:
+                color_grouped[name][feat].append(val)
+                global_color[feat].append(val)
+
+        if progress_every and total_count % progress_every == 0:
+            print(
+                f"[build_profiles] {total_count}장 처리 완료 (흑백 판정: {gray_count}장)",
+                flush=True,
+            )
+
+    if progress_every and total_count > 0:
+        print(
+            f"[build_profiles] 집계 완료: 총 {total_count}장 "
+            f"(컬러 {total_count - gray_count}장, 흑백 {gray_count}장)",
+            flush=True,
+        )
+
+    global_color_stats: dict[str, tuple[float, float]] = {}
+    for feat in COLOR_FEATURES:
+        pool = global_color[feat] if global_color[feat] else all_color_fallback[feat]
+        arr = np.asarray(pool, dtype=np.float64)
+        global_color_stats[feat] = (float(np.mean(arr)), float(np.std(arr)))
 
     profiles: dict[str, dict[str, list[float]]] = {}
-    for artist in sorted(grouped):
+    for artist in sorted(line_grouped):
         profiles[artist] = {}
-        for feat in NUMERIC_FEATURES:
-            vals = np.asarray(grouped[artist][feat], dtype=np.float64)
-            profiles[artist][feat] = [float(np.mean(vals)), float(np.std(vals))]
+        for feat in COLOR_FEATURES:
+            c_vals = color_grouped[artist][feat]
+            g_mean, g_std = global_color_stats[feat]
+            if len(c_vals) >= min_color_samples:
+                arr = np.asarray(c_vals, dtype=np.float64)
+                profiles[artist][feat] = [float(np.mean(arr)), float(np.std(arr))]
+            elif len(c_vals) > 0:
+                arr = np.asarray(c_vals, dtype=np.float64)
+                profiles[artist][feat] = [float(np.mean(arr)), max(float(np.std(arr)), g_std)]
+            else:
+                profiles[artist][feat] = [g_mean, g_std]
+
+        for feat in LINE_FEATURES:
+            arr = np.asarray(line_grouped[artist][feat], dtype=np.float64)
+            profiles[artist][feat] = [float(np.mean(arr)), float(np.std(arr))]
+
     return profiles
 
 
@@ -108,9 +171,14 @@ def _iter_train_samples(meta_path: Path) -> Iterable[tuple[str, np.ndarray]]:
 def build_profiles(
     meta_path: Path = META_PATH,
     output_path: Path = PROFILES_PATH,
+    *,
+    progress_every: int | None = 100,
 ) -> dict[str, dict[str, list[float]]]:
     """학습셋 기준으로 화가별 프로필을 계산해 JSON으로 저장한다."""
-    profiles = compute_profiles(_iter_train_samples(meta_path))
+    profiles = compute_profiles(
+        _iter_train_samples(meta_path),
+        progress_every=progress_every,
+    )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         json.dumps(profiles, ensure_ascii=False, indent=2),

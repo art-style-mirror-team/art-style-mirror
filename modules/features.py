@@ -215,7 +215,8 @@ def _palette_and_diversity(img: np.ndarray) -> tuple[list[list[int]], float]:
 
 
 @lru_cache(maxsize=1)
-def _profiles() -> dict:
+def _fallback_profiles() -> dict:
+    """profiles.json이 아직 생성되지 않은 환경을 위한 결정적 기본 프로필."""
     rng = np.random.default_rng(_seed("profiles"))
     out = {}
     for artist in ARTISTS:
@@ -237,15 +238,15 @@ def _cached_profiles(
     }
 
 
-def load_profiles(path: str | Path = PROFILES_PATH) -> dict:
+def load_profiles(path: str | Path | None = None) -> dict:
     """{artist: {feature: (mean, std)}}. 학습셋으로 계산된 artifacts/profiles.json을 로드한다."""
-    target = Path(path)
+    target = Path(PROFILES_PATH if path is None else path)
     if not target.exists():
         if target.resolve() == PROFILES_PATH.resolve():
             log.warning(
-                "profiles.json이 없어 가짜 프로필을 씁니다. build_profiles.py를 실행하세요."
+                "profiles.json이 없어 기본 폴백 프로필을 사용합니다. build_profiles.py를 실행하세요."
             )
-            return {a: dict(p) for a, p in _profiles().items()}
+            return {a: dict(p) for a, p in _fallback_profiles().items()}
         raise FileNotFoundError(f"프로필 파일을 찾을 수 없습니다: {target}")
 
     stat = target.stat()
