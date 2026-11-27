@@ -11,7 +11,7 @@
 | #17 색 특징 6종 | #43 | 머지됨 |
 | #16 `preprocess_input()` | #42 | 수정 요청 (3회째, 2026-11-26). 판정 방식을 바꾸자는 제안 |
 | #18 선 특징 5종 | #44 | 머지됨(`a03989b`, 2026-11-27). #18은 실측 표까지 열어 둔다 |
-| #19 프로필, #20 `predict_cv()` | 없음 | 시작 전. A의 #3 분할과 #18 실측 표가 먼저 필요하다 |
+| #19 프로필, #20 `predict_cv()` | 없음 | 시작 전. A의 #3 분할은 PR #58로 머지됐다(2026-11-27). #18 실측 표가 먼저 필요하다 |
 
 ## 먼저 해결할 것: 로컬에서 pytest가 돌지 않는다
 
@@ -71,6 +71,9 @@
 
 - `features.py` 모듈 docstring에 "`load_profiles()`는 아직 가짜 값"이라는 설명을 넣는다(PR #43 승인 때의 지적, 선 특징은 PR #44로 실제 값이 됨). #19가 끝나면 지운다.
 - AI-DLC 기록은 `aidlc/spaces/default/intents/<id>/`에 남긴다. `aidlc config --pin 2.11.4`, `aidlc doctor`로 CLI를 설치하면 위치와 폴더 이름을 도구가 맞춰 준다(`docs/aidlc-guide.md`).
+- **`intents.json`은 자기 PR에는 자기 intent 항목만 커밋한다** (D 결정, 2026-11-27, `docs/aidlc-guide.md` 4.3·6장). 다른 사람 항목이 바뀌어 있으면 `git add -p`로 빼고, 충돌하면 양쪽 항목을 모두 남긴다.
+  - main에 있는 C의 폴더 `issue-17`·`issue-18`(PR #43·#44)은 목록에 항목이 없다. 두 폴더에는 설계 문서 한 장씩만 있고 이름도 도구 형식(`YYMMDD-<slug>`)이 아니어서, AI-DLC 도구로 만든 intent가 아닐 수 있다. C의 PC `intents.json`에 이 두 항목이 있는지 확인해, 있으면 그 파일만 바꾸는 `chore` PR로 올리고 없으면 PR #44 댓글로 알린다.
+  - #19부터 AI-DLC를 쓰면 도구가 만든 폴더(`aidlc/spaces/default/intents/<YYMMDD-slug>/`)와 그 항목을 PR에 같이 넣는다.
 - `README.md` 팀원 표의 C 줄에 GitHub 아이디(@shj0228)를 채우는 PR을 올린다.
 
 ## 리뷰
