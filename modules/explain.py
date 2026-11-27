@@ -1,8 +1,10 @@
 """D — 신뢰도·UI·통합 (담당: 김현승).
 
-1일차 스텁: contracts/interfaces.md와 똑같은 모양의 결과를 돌려준다.
+contracts/interfaces.md와 똑같은 모양의 결과를 돌려준다.
 지표(1·2위 차이, 정규화 엔트로피, JSD)는 plan.md 6.3 식대로 계산하고,
 등급 경계값만 임시값을 쓴다(#24에서 검증셋으로 확정).
+해석 문장(#22)은 입력 유형 × 등급 9칸 문구표(LEVEL_TEXT)를 쓰고, 흑백(gray)이면 색을 말하지 않으며,
+CLIP 키워드는 점수 없이 문장으로 보여준다. 조사는 _josa()가 받침을 보고 고른다.
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ FEATURE_KO = {
     "warmth": "색온도",
     "color_diversity": "색 다양성",
     "edge_density": "선 밀도",
-    "direction": "선 방향",
+    "direction": "선 방향 일관성",
     "straight_ratio": "직선 비율",
     "roughness": "거칠기",
     "stroke_length": "윤곽선 길이",
@@ -40,11 +42,24 @@ TYPE_INTRO = {
     "painting": "이 그림은",
     "sketch": "이 스케치의 선을 보면",
 }
-LEVEL_NOTE = {
-    "높음": "",
-    "보통": "애매한 부분이 있어요.",
-    "낮음": "뚜렷하게 닮은 화가가 없어요.",
+DEFAULT_INTRO = "이 이미지는"  # 계약 밖 input_type의 제목
+DEFAULT_TYPE = "painting"  # 계약 밖 input_type은 그림 문구를 쓴다
+DEFAULT_LEVEL = "보통"  # 계약 밖 level은 보통 문구를 쓰고 Top 3를 보여준다
+
+# 입력 유형 × 등급 9칸 문구 (#22). 흑백 입력에도 쓰이므로 색 표현을 넣지 않는다.
+LEVEL_TEXT = {
+    ("photo", "높음"): "사진 속 장면의 분위기가 1위 화가의 그림과 뚜렷하게 닮았어요.",
+    ("photo", "보통"): "사진이라 붓질은 없지만, 장면의 분위기가 위 화가들과 어느 정도 닮았어요.",
+    ("photo", "낮음"): "사진을 그림에 견주기 어려워 뚜렷하게 닮은 화가가 없어요.",
+    ("painting", "높음"): "붓질과 화면 구성이 1위 화가의 작품과 뚜렷하게 닮았어요.",
+    ("painting", "보통"): "여러 화가의 특징이 섞여 있어 한 명으로 딱 잘라 말하기는 어려워요.",
+    ("painting", "낮음"): "학습한 화가들 중에서는 뚜렷하게 닮은 화가가 없어요.",
+    ("sketch", "높음"): "선의 방향과 밀도가 1위 화가의 선과 뚜렷하게 닮았어요.",
+    ("sketch", "보통"): "선의 특징이 여러 화가와 조금씩 겹쳐 애매한 부분이 있어요.",
+    ("sketch", "낮음"): "선만으로는 뚜렷하게 닮은 화가를 찾기 어려워요.",
 }
+LOW_TAIL = " 두 관점의 결과를 따로 보여드릴게요."  # "낮음" 문구 뒤에 붙인다
+KEYWORD_TAIL = "두드러져요."  # CLIP 키워드 문장 끝
 DISCLAIMER = "픽셀 수치 기반의 통계적 해석이며 미술사적 평가가 아닙니다."
 _KO_FONT_CANDIDATES = [
     "Malgun Gothic",
@@ -167,16 +182,15 @@ def _korean_font() -> str | None:
     return next((n for n in _KO_FONT_CANDIDATES if n in available), None)
 
 
-def _radar_value(feature: str, value: float) -> float:
-    if feature == "direction":  # 각도(0~180)를 0~1로
-        value = value / 180.0
+def _radar_value(value: float) -> float:
+    """레이더 축 값. 모든 수치 특징이 0~1이라(direction은 #45부터 방향 일관성) 범위만 자른다."""
     return float(min(1.0, max(0.0, value)))
 
 
 def _radar(features: dict, profile: dict, artist: str) -> Figure:
     names = [f for f in FEATURE_KO if f in profile and isinstance(features.get(f), (int, float))]
-    mine = [_radar_value(f, features[f]) for f in names]
-    theirs = [_radar_value(f, profile[f][0]) for f in names]
+    mine = [_radar_value(features[f]) for f in names]
+    theirs = [_radar_value(profile[f][0]) for f in names]
     angles = np.linspace(0, 2 * np.pi, len(names), endpoint=False).tolist()
     font = _korean_font()
 
@@ -207,6 +221,27 @@ def _ko_list(features: list[str]) -> str:
     return ", ".join(FEATURE_KO.get(f, f) for f in features)
 
 
+def _josa(word: str, pair: str) -> str:
+    """word에 받침을 보고 조사를 붙여 돌려준다. pair는 "이/가", "은/는", "과/와", "을/를" 중 하나.
+
+    끝 글자가 한글 음절(가~힣)이면 받침이 있을 때 앞쪽, 없을 때 뒤쪽 조사를 쓴다.
+    끝 글자가 한글이 아니면(영문·숫자 등) 받침 없는 뒤쪽 조사를 쓴다.
+    """
+    with_final, without_final = pair.split("/")
+    last = word[-1] if word else ""
+    if "가" <= last <= "힣" and (ord(last) - ord("가")) % 28:
+        return word + with_final
+    return word + without_final
+
+
+def _level_text(input_type: str, level: str) -> tuple[str, str]:
+    """(제목 도입부, 등급 문구). 계약 밖 input_type·level이 와도 KeyError 없이 기본 문구를 쓴다."""
+    intro = TYPE_INTRO.get(input_type, DEFAULT_INTRO)
+    kind = input_type if input_type in TYPE_INTRO else DEFAULT_TYPE
+    lv = level if (kind, level) in LEVEL_TEXT else DEFAULT_LEVEL
+    return intro, LEVEL_TEXT[(kind, lv)]
+
+
 def render_card(result: dict) -> tuple[str, Figure]:
     """결과 카드. (해석 문장 Markdown, 레이더 차트 Figure). result 형식은 contracts/interfaces.md 참고."""
     top3 = result["top3"]
@@ -214,40 +249,41 @@ def render_card(result: dict) -> tuple[str, Figure]:
     level = conf["level"]
     top1 = top3[0][0]
     top2 = top3[1][0] if len(top3) > 1 else None
-    lines = [f"### {TYPE_INTRO.get(result['input_type'], '이 이미지는')} 이런 화가와 닮았어요", ""]
+    gray = bool(result.get("gray", False))
+    intro, level_text = _level_text(result["input_type"], level)
+    lines = [f"### {intro} 이런 화가와 닮았어요", ""]
 
     if level == "낮음":
-        lines.append(
-            f"**신뢰 등급: {level}** — {LEVEL_NOTE[level]} 두 관점의 결과를 따로 보여드릴게요."
-        )
+        lines.append(f"**신뢰 등급: {level}** — {level_text}{LOW_TAIL}")
         lines.append("")
         lines.append(
             "- 소재·분위기·양식(CLIP): "
             + ", ".join(f"{a} {_pct(p)}" for a, p in result["p_clip_top"])
         )
-        lines.append(
-            "- 색·선(OpenCV): " + ", ".join(f"{a} {_pct(p)}" for a, p in result["p_cv_top"])
-        )
+        cv_label = "선(OpenCV)" if gray else "색·선(OpenCV)"
+        lines.append(f"- {cv_label}: " + ", ".join(f"{a} {_pct(p)}" for a, p in result["p_cv_top"]))
     else:
         for i, (artist, p) in enumerate(top3, 1):
             lines.append(f"{i}. **{artist}** — {_pct(p)}")
         lines.append("")
-        note = f" — {LEVEL_NOTE[level]}" if LEVEL_NOTE[level] else ""
-        lines.append(f"**신뢰 등급: {level}**{note}")
+        lines.append(f"**신뢰 등급: {level}** — {level_text}")
 
     clip_first, cv_first = result["p_clip_top"][0][0], result["p_cv_top"][0][0]
     if clip_first != cv_first:
-        lines.append(f"\n분위기는 **{clip_first}**, 색감·선은 **{cv_first}** 쪽에 가까워요.")
+        cv_view = "선은" if gray else "색감·선은"
+        lines.append(f"\n분위기는 **{clip_first}**, {cv_view} **{cv_first}** 쪽에 가까워요.")
 
     lines.append("")
     lines.append("**닮은 화풍**: " + ", ".join(f"{s} {_pct(p)}" for s, p in result["styles_top3"]))
-    lines.append("**CLIP 키워드**: " + ", ".join(f"{k}({s:.2f})" for k, s in result["keywords"]))
+    names = [k for k, _ in result["keywords"]]
+    if names:
+        listed = ", ".join(names[:-1] + [_josa(names[-1], "이/가")])
+        lines.append(f"**CLIP이 본 특징**: {listed} {KEYWORD_TAIL}")
 
     comp = result["comparison"]
     if comp["why_top1"]:
-        lines.append(
-            f"**{top1}인 이유**: {_ko_list(comp['why_top1'])}이(가) {top1} 평균에 더 가까워요."
-        )
+        why = _josa(_ko_list(comp["why_top1"]), "이/가")
+        lines.append(f"**{top1}인 이유**: {why} {top1} 평균에 더 가까워요.")
     if top2 and comp["toward_top2"]:
         lines.append(f"**{top2} 느낌이 나는 부분**: {_ko_list(comp['toward_top2'])}")
 
