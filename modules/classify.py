@@ -11,11 +11,16 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
+import joblib
 import numpy as np
+import sklearn
+from sklearn.linear_model import LogisticRegression
 
 from modules.data import load_index
 
 CALIBRATION_PATH = Path(__file__).resolve().parent.parent / "artifacts" / "calibration.json"
+# #11 선형 분류기(로지스틱 회귀) 저장 위치. CALIBRATION_PATH와 같은 방식.
+LINEAR_PATH = Path(__file__).resolve().parent.parent / "artifacts" / "linear.pkl"
 # calibration.json이 없을 때 쓰는 기본값 (plan.md 9.5 플랜 B: T = 1, 가중합 w = 0.8)
 DEFAULT_CALIBRATION = {"T_clip": 1.0, "T_cv": 1.0, "w": 0.8, "method": "weighted_sum"}
 LOGIT_SCALE = 20.0  # 코사인 유사도 → 점수 배율 (스텁용)
@@ -119,3 +124,83 @@ def fuse(p_clip: dict, p_cv: dict) -> list[tuple]:
     fused = {a: w * p_clip.get(a, 0.0) + (1 - w) * p_cv.get(a, 0.0) for a in names}
     total = sum(fused.values()) or 1.0
     return sorted(((a, p / total) for a, p in fused.items()), key=lambda x: -x[1])[:3]
+
+
+def _fit_linear(by: str, C: float = 1.0) -> LogisticRegression:
+    """학습셋만으로 `by`(="artist" 또는 "style") 라벨을 맞히는 로지스틱 회귀를 학습한다. (#11)
+
+    `load_index()`에서 `split=="train"`인 행만 쓰고, 입력 임베딩은 기존 `_l2_normalize`로
+    정규화한다. 라벨은 `meta`에서 그대로 읽어 클래스 수·이름을 하드코딩하지 않는다. 학습셋 추출은
+    `meta`의 라벨 인덱스가 아니라 위치(불리언 마스크)로 `emb`를 걸러 행 순서를 맞춘다(`_centroids`와 같은 방식).
+    학습된 모델 객체 하나를 돌려준다.
+    """
+    index = load_index()
+    emb, meta = index["emb"], index["meta"]
+    train = (meta["split"] == "train").to_numpy()
+    X = _l2_normalize(emb[train])
+    y = meta.loc[train, by].to_numpy()
+    model = LogisticRegression(C=C, max_iter=1000, random_state=0)
+    model.fit(X, y)
+    return model
+
+
+def _save_linear(models: dict, path: Path = LINEAR_PATH) -> None:
+    """학습된 모델 dict를 joblib로 저장한다. (#11)
+
+    `models`는 `{"artist": LogisticRegression, "style": LogisticRegression}` 꼴이다. 각 모델의 `C`와
+    학습에 쓴 scikit-learn 버전을 함께 적어, 로드 쪽에서 재현 조건을 확인할 수 있게 한다.
+    상위 폴더가 없으면 만든다.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "artist": models["artist"],
+        "style": models["style"],
+        "C": {"artist": models["artist"].C, "style": models["style"].C},
+        "sklearn_version": sklearn.__version__,
+    }
+    joblib.dump(payload, path)
+    # 같은 경로에 다시 저장하면 캐시된 옛 모델이 아니라 새 모델이 읽히도록 캐시를 비운다. (#11)
+    _load_linear.cache_clear()
+
+
+@lru_cache(maxsize=1)
+def _load_linear(path: Path = LINEAR_PATH) -> dict:
+    """저장된 선형 분류기 dict를 읽어 돌려준다. (#11)
+
+    파일이 없으면 어떻게 학습·저장하는지 힌트를 담은 `FileNotFoundError`를 던진다. `@lru_cache`라
+    테스트에서는 `_load_linear.cache_clear()`로 캐시를 비운다.
+    """
+    if not path.exists():
+        raise FileNotFoundError(
+            f"선형 분류기 파일이 없습니다: {path}\n"
+            '`_fit_linear("artist")`·`_fit_linear("style")`로 학습한 뒤 '
+            "`_save_linear({'artist': ..., 'style': ...})`로 저장하세요 (#11)."
+        )
+    return joblib.load(path)
+
+
+def _linear_logits(
+    E: np.ndarray, by: str, model: LogisticRegression | None = None
+) -> tuple[list, np.ndarray]:
+    """선형 분류기의 로짓. `(이름 목록, z)`를 돌려주며 `z.shape == (n, 이름 수)`. (#11)
+
+    이름 목록은 `model.classes_`(정렬 순서)로, #9 `_knn_logits`·#10 `_centroid_logits`와 같은 모양이다.
+    `model`이 없으면 저장된 모델(`_load_linear()[by]`)을 쓴다. `E`가 2차원이 아니면 `ValueError`.
+    0장 입력이면 `(이름 목록, (0, 이름 수) 영배열)`. 그 외에는 `_l2_normalize(E)` 뒤
+    `decision_function`을 쓴다. 이진 분류 시 sklearn은 `(n,)`을 주므로 `classes_` 순서에 맞춰 `(n, 2)`로 맞춘다.
+    """
+    if model is None:
+        model = _load_linear()[by]
+    E = np.asarray(E, dtype=np.float32)
+    if E.ndim != 2:
+        raise ValueError(f"E는 2차원 (n, 512)이어야 합니다. 받은 차원: {E.ndim}")
+    names = list(model.classes_)
+    if E.shape[0] == 0:
+        return names, np.zeros((0, len(names)), dtype=np.float32)
+    z = model.decision_function(_l2_normalize(E))
+    if z.ndim == 1:
+        # 이진 분류 시 decision_function은 (n,)을 준다. 양수는 classes_[1] 쪽이므로
+        # column 0 = classes_[0], column 1 = classes_[1] 점수로 쌓아 (n, 2)로 맞춘다.
+        # [0, z]로 쌓으면 softmax(z) = [sigmoid(-z), sigmoid(z)]가 되어 model.predict_proba와 일치한다.
+        z = np.column_stack([np.zeros_like(z), z])
+    return names, z
