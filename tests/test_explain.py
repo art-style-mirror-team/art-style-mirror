@@ -342,3 +342,88 @@ def test_build_view_kind_and_history_name(level, gray, input_type, kind):
         assert view["history_name"] == "닮은 화가 없음"
     else:
         assert view["history_name"] == explain.ARTIST_KO[result["top3"][0][0]][0]
+
+
+# PR #58 실제 색인(화가 23명, "Post_Impressionism"처럼 밑줄 쓴 화풍 16종)에 맞춘 화면 이름 (#37)
+REAL_ARTISTS_23 = [
+    "Albrecht Durer",
+    "Boris Kustodiev",
+    "Camille Pissarro",
+    "Childe Hassam",
+    "Claude Monet",
+    "Edgar Degas",
+    "Eugene Boudin",
+    "Gustave Dore",
+    "Ilya Repin",
+    "Ivan Aivazovsky",
+    "Ivan Shishkin",
+    "John Singer Sargent",
+    "Marc Chagall",
+    "Martiros Saryan",
+    "Nicholas Roerich",
+    "Pablo Picasso",
+    "Paul Cezanne",
+    "Pierre-Auguste Renoir",
+    "Pyotr Konchalovsky",
+    "Raphael Kirchner",
+    "Rembrandt",
+    "Salvador Dali",
+    "Vincent van Gogh",
+]
+REAL_STYLES_16 = [
+    "Abstract_Expressionism",
+    "Analytical_Cubism",
+    "Art_Nouveau",
+    "Baroque",
+    "Cubism",
+    "Expressionism",
+    "Fauvism",
+    "Impressionism",
+    "Naive_Art_Primitivism",
+    "Northern_Renaissance",
+    "Pointillism",
+    "Post_Impressionism",
+    "Realism",
+    "Romanticism",
+    "Symbolism",
+    "Synthetic_Cubism",
+]
+
+
+def test_artist_ko_covers_real_index_artists():
+    missing = [a for a in REAL_ARTISTS_23 if a not in explain.ARTIST_KO]
+    assert missing == []
+    assert explain._artist_names("Pyotr Konchalovsky") == ("표트르 콘찰롭스키", "콘찰롭스키")
+
+
+def test_style_name_covers_real_index_styles():
+    names = {s: explain._style_name(s) for s in REAL_STYLES_16}
+    untranslated = [s for s, ko in names.items() if not any("가" <= ch <= "힣" for ch in ko)]
+    assert untranslated == []
+    assert names["Post_Impressionism"] == "후기 인상주의"
+    assert names["Art_Nouveau"] == "아르누보"
+
+
+@pytest.mark.parametrize(
+    "style",
+    ["Post_Impressionism", "Post-Impressionism", "post impressionism", " POST_impressionism "],
+)
+def test_style_name_ignores_separators_and_case(style):
+    assert explain._style_name(style) == "후기 인상주의"
+
+
+@pytest.mark.parametrize(
+    ("style", "shown"), [("Color_Field_Painting", "Color Field Painting"), ("", ""), (None, "")]
+)
+def test_style_name_unknown_replaces_underscores(style, shown):
+    assert explain._style_name(style) == shown
+
+
+def test_build_view_shows_korean_style_for_underscore_styles():
+    result = dict(_result())
+    result["styles_top3"] = [("Post_Impressionism", 0.5), ("Art_Nouveau", 0.3), ("Realism", 0.2)]
+    result["similar"] = []
+    view = explain.build_view(result)
+    assert [s["name"] for s in view["styles"]] == ["후기 인상주의", "아르누보", "사실주의"]
+    assert view["styles"][0]["name_orig"] == "Post_Impressionism"
+    assert view["head"]["style"] == "후기 인상주의"

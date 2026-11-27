@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import numbers
+import re
 from functools import lru_cache
 
 import numpy as np
@@ -47,9 +48,20 @@ LEVEL_NOTE = {
 }
 DISCLAIMER = "픽셀 수치 기반의 통계적 해석이며 미술사적 평가가 아닙니다."
 
-# 화면용 화가 한글 이름: 원래 이름 → (전체 이름, 짧은 이름). 목록은 modules/data.py의 ARTIST_STYLE
-# 24명과 같다. 표에 없는 화가(#3에서 목록이 바뀌는 경우 등)는 원래 이름을 그대로 쓴다.
+# 화면용 화가 한글 이름: 원래 이름 → (전체 이름, 짧은 이름). #3(PR #58)에서 확정한 화가 23명과
+# 1일차 스텁의 24명을 모두 담는다. 표에 없는 화가는 원래 이름을 그대로 쓴다.
 ARTIST_KO = {
+    "Boris Kustodiev": ("보리스 쿠스토디예프", "쿠스토디예프"),
+    "Childe Hassam": ("차일드 하삼", "하삼"),
+    "Eugene Boudin": ("외젠 부댕", "부댕"),
+    "Gustave Dore": ("귀스타브 도레", "도레"),
+    "Ilya Repin": ("일리야 레핀", "레핀"),
+    "John Singer Sargent": ("존 싱어 사전트", "사전트"),
+    "Marc Chagall": ("마르크 샤갈", "샤갈"),
+    "Martiros Saryan": ("마르티로스 사리안", "사리안"),
+    "Nicholas Roerich": ("니콜라스 레리흐", "레리흐"),
+    "Pyotr Konchalovsky": ("표트르 콘찰롭스키", "콘찰롭스키"),
+    "Raphael Kirchner": ("라파엘 키르히너", "키르히너"),
     "Vincent van Gogh": ("빈센트 반 고흐", "반 고흐"),
     "Claude Monet": ("클로드 모네", "모네"),
     "Pierre-Auguste Renoir": ("피에르오귀스트 르누아르", "르누아르"),
@@ -75,8 +87,14 @@ ARTIST_KO = {
     "Ivan Aivazovsky": ("이반 아이바좁스키", "아이바좁스키"),
     "Ivan Shishkin": ("이반 시시킨", "시시킨"),
 }
-# 화면용 화풍 한글 이름. modules/data.py ARTIST_STYLE의 화풍과 같다. 표에 없으면 원래 이름.
+# 화면용 화풍 한글 이름. 실제 색인(meta.csv)은 "Post_Impressionism"처럼 밑줄을 쓰므로 찾을 때는
+# _style_name()이 공백·하이픈·밑줄·대소문자 차이를 무시한다. 표에 없으면 밑줄을 공백으로 바꿔 쓴다.
 STYLE_KO = {
+    "Symbolism": "상징주의",
+    "Pointillism": "점묘주의",
+    "Naive Art Primitivism": "나이브 아트",
+    "Analytical Cubism": "분석적 입체주의",
+    "Synthetic Cubism": "종합적 입체주의",
     "Post-Impressionism": "후기 인상주의",
     "Impressionism": "인상주의",
     "Cubism": "입체주의",
@@ -338,6 +356,20 @@ def _artist_names(artist: str) -> tuple[str, str]:
     return ARTIST_KO.get(artist, (artist, artist))
 
 
+def _style_key(style: str) -> str:
+    return re.sub(r"[\s_\-]+", " ", style).strip().casefold()
+
+
+_STYLE_KO_BY_KEY = {_style_key(k): v for k, v in STYLE_KO.items()}
+
+
+def _style_name(style) -> str:
+    """화풍의 한글 이름. "Post_Impressionism"·"Post-Impressionism" 모두 "후기 인상주의".
+    표에 없으면 밑줄을 공백으로 바꾼 원래 이름을 쓴다."""
+    raw = str(style or "")
+    return _STYLE_KO_BY_KEY.get(_style_key(raw), raw.replace("_", " ").strip())
+
+
 def _pct_int(p) -> int:
     """확률(0~1)을 정수 %로. 수가 아니면 0."""
     return round(float(p) * 100) if _finite_number(p) else 0
@@ -442,7 +474,7 @@ def _work_view(work: dict, axes: list[dict], top1_short: str, low: bool) -> dict
         "short": short,
         "artist_orig": artist,
         "label": f"{short} #{wid}" if wid else short,
-        "style": STYLE_KO.get(style, style),
+        "style": _style_name(style),
         "style_orig": style,
         "pct": max(0, min(100, _pct_int(work.get("score")))),
         "top1_work": top1_work,
@@ -503,7 +535,7 @@ def build_view(result: dict, works: list[dict] | None = None) -> dict:
         sub = "두 관점의 결과를 따로 보여 드려요"
     else:
         title = full
-        sub = " · ".join(s for s in (top1, STYLE_KO.get(style, style)) if s)
+        sub = " · ".join(s for s in (top1, _style_name(style)) if s)
 
     radar = _radar_view(result, top1, top2)
 
@@ -515,7 +547,7 @@ def build_view(result: dict, works: list[dict] | None = None) -> dict:
             "name": full,
             "short": short,
             "name_orig": top1,
-            "style": STYLE_KO.get(style, style),
+            "style": _style_name(style),
             "style_orig": style,
             "pct": _pct_int(top3[0][1]),
         },
@@ -537,7 +569,7 @@ def build_view(result: dict, works: list[dict] | None = None) -> dict:
         ),
         "radar": radar,
         "styles": [
-            {"name": STYLE_KO.get(str(s), str(s)), "name_orig": str(s), "pct": _pct_int(p)}
+            {"name": _style_name(s), "name_orig": str(s), "pct": _pct_int(p)}
             for s, p in result["styles_top3"]
         ],
         "keywords": [str(k) for k, _ in result["keywords"]],
