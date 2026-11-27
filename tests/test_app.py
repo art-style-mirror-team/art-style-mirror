@@ -218,7 +218,9 @@ def test_load_work_inside_data_gives_data_url_and_features(repo, monkeypatch):
         assert max(im.size) == app.WORK_THUMB_SIDE
 
 
-def test_analyze_view_result_has_compare(upload_dir, monkeypatch):
+def test_analyze_view_result_has_compare(upload_dir, monkeypatch, tmp_path):
+    # 이 PC에 명화 파일(data/images)이 받아져 있어도 결과가 같도록, 빈 폴더를 저장소 루트로 쓴다.
+    monkeypatch.setattr(app, "REPO_ROOT", tmp_path / "empty_repo")
     calls = {"embed": 0}
     real_embed = app.data.embed_image
 
@@ -253,3 +255,21 @@ def test_analyze_view_hides_compare_when_it_fails(upload_dir, monkeypatch, caplo
     assert out[-1]["phase"] == "result"
     assert out[-1]["view"]["compare"] is None
     assert "비교 명화" in caplog.text
+
+
+def test_warm_up_loads_index_and_model_once(monkeypatch):
+    calls = []
+    monkeypatch.setattr(app.data, "load_index", lambda: calls.append("index"))
+    monkeypatch.setattr(app.data, "embed_image", lambda img: calls.append(img.shape))
+    app._warm_up()
+    assert calls == ["index", (32, 32, 3)]
+
+
+def test_warm_up_failure_is_logged_not_raised(monkeypatch, caplog):
+    def broken(_img):
+        raise OSError("모델 다운로드 실패")
+
+    monkeypatch.setattr(app.data, "embed_image", broken)
+    with caplog.at_level("ERROR", logger="app"):
+        app._warm_up()  # 예외가 밖으로 나오지 않아야 한다
+    assert "미리 불러오지 못했습니다" in caplog.text

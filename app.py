@@ -346,5 +346,21 @@ def build_demo() -> gr.Blocks:
 # `gradio app.py`(코드를 저장하면 자동 재시작)는 모듈의 `demo` 변수를 찾아 띄운다.
 demo = build_demo()
 
+
+def _warm_up() -> None:
+    """CLIP 모델과 명화 색인을 미리 불러 둔다. 첫 분석이 모델을 읽느라 수십 초 걸리지 않게 한다.
+    실패해도 앱은 띄우고, 첫 분석에서 다시 불러온다."""
+    logger.info("CLIP 모델과 명화 색인을 불러오는 중...")
+    try:
+        data.load_index()
+        data.embed_image(np.zeros((32, 32, 3), dtype=np.uint8))
+    except Exception:
+        logger.exception("모델을 미리 불러오지 못했습니다. 첫 분석에서 다시 불러옵니다.")
+
+
 if __name__ == "__main__":
+    # 다른 라이브러리의 INFO 로그(HTTP 요청 등)는 숨기고 이 앱의 진행 안내만 보인다.
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    logger.setLevel(logging.INFO)
+    _warm_up()
     demo.launch(server_name="127.0.0.1")
