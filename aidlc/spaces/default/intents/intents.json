@@ -6,5 +6,13 @@
     "scope": "classic",
     "status": "archived",
     "request": "49fd7343"
+  },
+  {
+    "uuid": "01a21c39-906f-72f9-92eb-6ce677e0b015",
+    "slug": "explain-sentences",
+    "dirName": "261127-explain-sentences",
+    "scope": "express",
+    "status": "complete",
+    "request": "8ed424a9"
   }
 ]
