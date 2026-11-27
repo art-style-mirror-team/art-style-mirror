@@ -71,6 +71,8 @@
 
 - `features.py` 모듈 docstring에 "`load_profiles()`는 아직 가짜 값"이라는 설명을 넣는다(PR #43 승인 때의 지적, 선 특징은 PR #44로 실제 값이 됨). #19가 끝나면 지운다.
 - AI-DLC 기록은 `aidlc/spaces/default/intents/<id>/`에 남긴다. `aidlc config --pin 2.11.4`, `aidlc doctor`로 CLI를 설치하면 위치와 폴더 이름을 도구가 맞춰 준다(`docs/aidlc-guide.md`).
+- **`intents.json`은 자기 PR에는 자기 intent 항목만 커밋한다** (D 결정, 2026-11-27, `docs/aidlc-guide.md` 4.3·6장). 다른 사람 항목이 바뀌어 있으면 `git add -p`로 빼고, 충돌하면 양쪽 항목을 모두 남긴다.
+  - main에 있는 C의 폴더 `issue-17`·`issue-18`은 목록에 항목이 없다. 폴더 이름이 도구 형식(`YYMMDD-<slug>`)이 아니어서, C의 PC `intents.json`에 이 두 항목이 있는지 먼저 확인한다. 있으면 그 파일만 바꾸는 `chore` PR로 올리고, 없으면 D에게 알린다.
 - `README.md` 팀원 표의 C 줄에 GitHub 아이디(@shj0228)를 채우는 PR을 올린다.
 
 ## 리뷰

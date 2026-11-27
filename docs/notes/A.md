@@ -45,6 +45,7 @@
 - 이슈 #1 확인: `pytest -q`(main `8160218` 기준 48 passed, 2 skipped)와 `python app.py` 실행 결과를 이슈 #1에 댓글로 남긴다.
 - `README.md` 팀원 표의 A 줄에 GitHub 아이디를 채우는 PR을 올린다.
 - AI-DLC: `aidlc config --pin 2.11.4`, `aidlc doctor` (`docs/aidlc-guide.md`).
+- AI-DLC를 쓰면 `intents.json`에 자기 intent 항목만 같은 PR로 커밋한다(D 결정, 2026-11-27, `docs/aidlc-guide.md` 4.3·6장). 충돌하면 양쪽 항목을 모두 남긴다.
 
 ## 리뷰
 

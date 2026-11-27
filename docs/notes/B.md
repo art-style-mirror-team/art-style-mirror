@@ -18,6 +18,7 @@
   - (선택) 대표 이미지로 `@pytest.mark.model` 테스트를 추가한다.
   - `requirements.md`의 "화이트밸런스 적용 여부" 서술과 `test-results.md`의 NFR3 "Met"을 고친다.
   - 확인이 끝날 때까지 본문은 `Closes #8` 대신 `Refs #8`로 둔다.
+  - `intents.json`에 이 PR의 intent 항목(`261125-detect-type-clip`)만 추가해 커밋한다(아래 결정).
 - D의 참고 실험(합성 기준, 리뷰어 PC의 `openai/clip-vit-base-patch32`, 정확도로 쓰지 않음): 실사진 2장과 그 변형 14개에서 PR #56은 14/14, 단순 문장("a photo"/"a painting"/"a sketch")은 11/14였다. 흑백 사진과 폰으로 찍은 연필화는 점수 차가 0.004~0.027로 경계에 가까웠다.
 - `modules/classify.py`는 1일차 스텁이다(`TODO(#8)`~`TODO(#15)`). `calibration.json`이 없으면 기본값 `{"T_clip": 1.0, "T_cv": 1.0, "w": 0.8, "method": "weighted_sum"}`을 쓴다.
 - A의 실제 임베딩(#4, 4일차 예정)이 아직 없다. 그 전에는 `data.load_index()` 스텁의 가짜 색인(화가 24명 × 20점, 같은 화가끼리 모이게 만든 벡터)으로 코드와 노트북 틀을 만든다. 가짜 색인으로 얻은 정확도는 기록하지 않는다.
@@ -28,6 +29,9 @@
 - **최종 순위는 `fuse()` 결과만 쓴다** (`AGENTS.md` 규칙 8). 두 관점이 엇갈리면 숨기지 않고 함께 보여준다.
 
 - **CLIP 모델은 A가 #5에서 정하고, `embed_text()`는 받은 문장을 그대로 임베딩한다** (PR #56 리뷰, 이슈 #5 댓글, 2026-11-26). B는 모델을 직접 불러오지 않는다. 모델이 바뀌면 `TYPE_PROMPTS`의 효과도 달라지므로 #8 평가는 #5의 모델로 다시 한다.
+
+- **`intents.json`은 자기 PR에는 자기 intent 항목만 커밋한다** (D 결정, 2026-11-27, `docs/aidlc-guide.md` 4.3·6장). 공용 파일이지만 커밋한다. 다른 사람 항목이 바뀌어 있으면 `git add -p`로 빼고, 충돌하면 양쪽 항목을 모두 남긴다.
+  - 머지된 PR #57의 항목(`261126-similar-works`)이 main 목록에 없다. `intents.json` 한 파일만 바꾸는 `chore: #13 AI-DLC intent 항목 추가` PR로 올린다. `uuid`·`request` 값은 B의 PC 파일에만 있다.
 
 ## 다른 역할의 변경 중 B에 영향을 주는 것
 
