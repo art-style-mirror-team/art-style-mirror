@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -136,3 +138,113 @@ def test_similar_works_reads_by_position_not_label(monkeypatch):
     assert [w["id"] for w in works] == ["P0"]  # 코사인 0.9가 1위(행 위치 0)
     assert works[0]["artist"] == "artist-P0"
     assert works[0]["path"] == "data/P0.jpg"
+
+
+# --- #10 centroid
+
+
+def _centroid_index(rows: list[tuple]) -> dict:
+    """중심점 테스트용 작은 색인. rows는 (id, artist, style, split, emb_row) 튜플 목록.
+    meta는 계약대로 6개 열(id, artist, style, genre, path, split)을 모두 가진다."""
+    ids = [r[0] for r in rows]
+    meta = pd.DataFrame(
+        {
+            "id": ids,
+            "artist": [r[1] for r in rows],
+            "style": [r[2] for r in rows],
+            "genre": ["landscape"] * len(rows),
+            "path": [f"data/{i}.jpg" for i in ids],
+            "split": [r[3] for r in rows],
+        }
+    )
+    emb = np.array([r[4] for r in rows], dtype=np.float32)
+    return {"emb": emb, "meta": meta}
+
+
+@contextmanager
+def _fake_centroids(monkeypatch, idx: dict):
+    """가짜 색인을 끼우고, `_centroids`가 `lru_cache`이므로 전후로 캐시를 비운다."""
+    monkeypatch.setattr(classify, "load_index", lambda: idx)
+    classify._centroids.cache_clear()
+    try:
+        yield
+    finally:
+        classify._centroids.cache_clear()
+
+
+# FR3.2 — 중심점에는 학습셋(split=="train")만 쓰인다(비학습 행이 섞이면 결과가 달라짐)
+def test_centroid_logits_uses_train_split_only(monkeypatch):
+    # artist "A": train 2행([1,0,0])과 val 1행([0,1,0]). val이 섞이면 A 중심점이 [0,1,0] 쪽으로 이동.
+    idx = _centroid_index(
+        [
+            ("a1", "A", "sA", "train", [1.0, 0.0, 0.0]),
+            ("a2", "A", "sA", "train", [1.0, 0.0, 0.0]),
+            ("a3", "A", "sA", "val", [0.0, 1.0, 0.0]),
+            ("b1", "B", "sB", "train", [0.0, 0.0, 1.0]),
+        ]
+    )
+    with _fake_centroids(monkeypatch, idx):
+        names, z = classify._centroid_logits(np.array([[1.0, 0.0, 0.0]]), "artist", scale=1.0)
+        assert names == ["A", "B"]
+        # 학습셋만 쓰면 A 중심점은 [1,0,0] → [1,0,0]과 코사인 1.0. val이 섞였다면 ~0.894로 줄어든다.
+        assert z[0, names.index("A")] == pytest.approx(1.0)
+
+
+# FR3.3 — 어떤 중심점에 가장 가까운 입력이면 그 이름의 z가 최댓값(argmax)이다
+def test_centroid_logits_nearest_centroid_has_largest_z(monkeypatch):
+    idx = _centroid_index(
+        [
+            ("a", "A", "sA", "train", [1.0, 0.0, 0.0]),
+            ("b", "B", "sB", "train", [0.0, 1.0, 0.0]),
+            ("c", "C", "sC", "train", [0.0, 0.0, 1.0]),
+        ]
+    )
+    with _fake_centroids(monkeypatch, idx):
+        names, z = classify._centroid_logits(np.array([[0.9, 0.1, 0.0]]), "artist")
+        assert names[int(np.argmax(z[0]))] == "A"  # A 중심점에 가장 가깝다
+
+
+# FR3.4 — scale은 z에 선형으로 반영된다(2배 → z 2배)
+def test_centroid_logits_scale_is_linear(monkeypatch):
+    idx = _centroid_index(
+        [
+            ("a", "A", "sA", "train", [1.0, 0.0, 0.0]),
+            ("b", "B", "sB", "train", [0.0, 1.0, 0.0]),
+        ]
+    )
+    E = np.array([[0.8, 0.6, 0.0]])
+    with _fake_centroids(monkeypatch, idx):
+        _, z1 = classify._centroid_logits(E, "artist", scale=5.0)
+        _, z2 = classify._centroid_logits(E, "artist", scale=10.0)
+        assert z2 == pytest.approx(2.0 * z1)
+
+
+# FR2.1/FR3.5 — 1차원 입력이면 ValueError
+def test_centroid_logits_rejects_1d_input(monkeypatch):
+    idx = _centroid_index([("a", "A", "sA", "train", [1.0, 0.0, 0.0])])
+    with _fake_centroids(monkeypatch, idx), pytest.raises(ValueError):
+        classify._centroid_logits(np.array([1.0, 0.0, 0.0]), "artist")
+
+
+# FR2.2/FR3.5 — 0장 입력이면 예외 없이 (이름 목록, (0, 이름 수) z)를 돌려준다
+def test_centroid_logits_zero_rows_returns_empty_z(monkeypatch):
+    idx = _centroid_index(
+        [
+            ("a", "A", "sA", "train", [1.0, 0.0, 0.0]),
+            ("b", "B", "sB", "train", [0.0, 1.0, 0.0]),
+        ]
+    )
+    with _fake_centroids(monkeypatch, idx):
+        names, z = classify._centroid_logits(np.zeros((0, 3), dtype=np.float32), "artist")
+        assert z.shape == (0, len(names))
+
+
+# FR2.3/FR3.5 — scale <= 0이면 ValueError
+def test_centroid_logits_rejects_non_positive_scale(monkeypatch):
+    idx = _centroid_index([("a", "A", "sA", "train", [1.0, 0.0, 0.0])])
+    with _fake_centroids(monkeypatch, idx):
+        E = np.array([[1.0, 0.0, 0.0]])
+        with pytest.raises(ValueError):
+            classify._centroid_logits(E, "artist", scale=0.0)
+        with pytest.raises(ValueError):
+            classify._centroid_logits(E, "artist", scale=-1.0)
