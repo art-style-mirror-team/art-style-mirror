@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from modules.data import display_name  # noqa: E402
-from modules.features import (  # noqa: E402
+from modules.data import display_name
+from modules.features import (
     LONG_SIDE,
     NUMERIC_FEATURES,
     extract_features,

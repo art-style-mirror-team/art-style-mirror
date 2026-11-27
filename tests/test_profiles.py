@@ -38,14 +38,38 @@ def test_build_and_load_profiles_uses_train_split_only(tmp_path: Path) -> None:
 
     meta_path = tmp_path / "meta.csv"
     rows = [
-        {"id": "1", "artist": "vincent-van-gogh", "style": "Post-Impressionism",
-         "genre": "landscape", "path": str(train1), "split": "train"},
-        {"id": "2", "artist": "vincent-van-gogh", "style": "Post-Impressionism",
-         "genre": "landscape", "path": str(train2), "split": "train"},
-        {"id": "3", "artist": "vincent-van-gogh", "style": "Post-Impressionism",
-         "genre": "landscape", "path": str(val1), "split": "val"},
-        {"id": "4", "artist": "vincent-van-gogh", "style": "Post-Impressionism",
-         "genre": "landscape", "path": str(test1), "split": "test"},
+        {
+            "id": "1",
+            "artist": "vincent-van-gogh",
+            "style": "Post-Impressionism",
+            "genre": "landscape",
+            "path": str(train1),
+            "split": "train",
+        },
+        {
+            "id": "2",
+            "artist": "vincent-van-gogh",
+            "style": "Post-Impressionism",
+            "genre": "landscape",
+            "path": str(train2),
+            "split": "train",
+        },
+        {
+            "id": "3",
+            "artist": "vincent-van-gogh",
+            "style": "Post-Impressionism",
+            "genre": "landscape",
+            "path": str(val1),
+            "split": "val",
+        },
+        {
+            "id": "4",
+            "artist": "vincent-van-gogh",
+            "style": "Post-Impressionism",
+            "genre": "landscape",
+            "path": str(test1),
+            "split": "test",
+        },
     ]
     with meta_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["id", "artist", "style", "genre", "path", "split"])
