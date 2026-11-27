@@ -56,6 +56,35 @@ def _centroids() -> dict:
     return out
 
 
+def _centroid_logits(E: np.ndarray, by: str, scale: float = LOGIT_SCALE) -> tuple[list, np.ndarray]:
+    """중심점(centroid) 방식 판정 로짓.
+
+    학습셋 중심점(`_centroids()`)과 입력 임베딩의 코사인 유사도에 `scale`을 곱해 로짓을 만든다.
+    중심점을 새로 계산하지 않고 `_centroids()[by]`의 `(이름 목록, 중심점)`을 그대로 재사용한다.
+
+    인자:
+        E: 입력 임베딩 여러 장, shape `(n, 512)`. 1장이라도 2차원이어야 한다.
+        by: 축 키. "artist" 또는 "style".
+        scale: 코사인 유사도 → 로짓 배율(기본 `LOGIT_SCALE`). 양수여야 한다.
+
+    반환:
+        `(이름 목록, z)`. 이름 목록은 `_centroids()`가 준 정렬된 목록 그대로이고,
+        `z`의 shape는 `(n, 이름 수)`다(#9 `_knn_logits`와 같은 모양).
+
+    예외:
+        `scale <= 0`이거나 `E`가 2차원이 아니면 `ValueError`.
+    """
+    E = np.asarray(E, dtype=np.float32)
+    if scale <= 0:
+        raise ValueError(f"scale는 양수여야 합니다. 받은 값: {scale}")
+    if E.ndim != 2:
+        raise ValueError(f"E는 2차원 (n, 512) 배열이어야 합니다. 받은 shape: {E.shape}")
+    names, cents = _centroids()[by]
+    En = _l2_normalize(E)
+    z = scale * (En @ cents.T)
+    return names, z
+
+
 def detect_type(img_emb: np.ndarray) -> str:
     """입력 유형 판별. "photo" | "painting" | "sketch". (스텁: 임베딩 앞 3개 값 중 최댓값)"""
     # TODO(#8): 스텁 — #8 CLIP zero-shot 유형 판별 (담당 B)
