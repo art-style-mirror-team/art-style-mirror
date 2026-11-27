@@ -75,7 +75,8 @@
 
 ## 리뷰
 
-- C의 PR(`features.py`, `build_profiles.py`)은 D(@KimHyeonSeung1213)가 리뷰한다. C는 D의 PR(`explain.py`, `app.py`)과 설정·문서·CI 변경을 리뷰한다(`.github/CODEOWNERS`).
+- **짝은 형식상 기본값이다 (D 결정, 2026-11-27, PR #60).** `.github/CODEOWNERS`가 짝에게 리뷰 요청을 자동으로 보낼 뿐, 작성자가 아닌 팀원은 누구나 다른 사람의 PR을 리뷰하고 승인할 수 있다. 승인 1명과 CI 통과면 작성자를 포함해 write 권한이 있는 누구나 머지 커밋으로 머지할 수 있다. 자기 PR은 승인할 수 없다.
+- 짝: C의 PR(`features.py`, `build_profiles.py`)은 D(@KimHyeonSeung1213)에게, D의 PR(`explain.py`, `app.py`)과 설정·문서·CI 변경은 C에게 요청이 간다(`.github/CODEOWNERS`).
 
 ## 다른 PR 리뷰에서 반복된 지적 (같은 실수를 하지 않는다)
 
