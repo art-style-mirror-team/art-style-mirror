@@ -30,5 +30,13 @@
     "scope": "express",
     "status": "complete",
     "request": "4fa4dcf3"
+  },
+  {
+    "uuid": "01a21762-9f1a-73b2-b1b3-eef25892eb91",
+    "slug": "knn-vote",
+    "dirName": "261126-knn-vote",
+    "scope": "classic",
+    "status": "complete",
+    "request": "4019319f"
   }
 ]
