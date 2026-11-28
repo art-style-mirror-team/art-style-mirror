@@ -1,0 +1,1 @@
+"#8 modules/classify.py의 detect_type()을 CLIP zero-shot(사진/그림/스케치 문장 앙상블)로 구현한다. contracts/interfaces.md는 변경 불가. 문장 임베딩은 data.embed_text(...)로 모듈을 통해 부르고, 동작 테스트는 test/test_classify.py에 둔다."
