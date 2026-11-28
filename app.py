@@ -81,6 +81,7 @@ def _analyze_steps(img: np.ndarray, ctx: dict | None = None) -> Generator[str, N
 
     # 5. 설명 (D)
     profiles = features.load_profiles()
+    artist_info = data.load_artist_info()
     top1 = top3[0][0]
     top2 = top3[1][0] if len(top3) > 1 else top1
     # 스케치는 색 특징을 빼고 선 특징만 대조한다(predict_cv(gray=True)와 같은 기준).
@@ -103,6 +104,8 @@ def _analyze_steps(img: np.ndarray, ctx: dict | None = None) -> Generator[str, N
         "features": feats,
         "top1_profile": profiles[top1],
         "comparison": comparison,
+        # 화가 소개는 Top 3 화가만 넘긴다. 소개 파일에 없는 화가는 빠진다.
+        "artist_info": {a: artist_info[a] for a, _ in top3 if a in artist_info},
     }
 
 

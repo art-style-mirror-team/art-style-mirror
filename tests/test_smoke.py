@@ -75,6 +75,14 @@ def test_load_index_format():
     assert set(meta["split"]) == {"train", "val", "test"}
 
 
+def test_load_artist_info_format():
+    info = data.load_artist_info()
+    assert isinstance(info, dict)
+    for row in info.values():
+        assert set(row) == {"years", "nationality", "intro"}
+        assert all(isinstance(v, str) for v in row.values())
+
+
 def test_clip_keywords_format(color_img):
     kws = data.clip_keywords(data.embed_image(color_img), k=3)
     assert len(kws) == 3
@@ -177,6 +185,8 @@ def test_pipeline_end_to_end(request, fixture):
     assert isinstance(text, str) and explain.DISCLAIMER in text
     assert isinstance(fig, Figure)
     assert result["confidence"]["level"] in {"높음", "보통", "낮음"}
+    top3_names = {a for a, _ in result["top3"]}
+    assert isinstance(result["artist_info"], dict) and set(result["artist_info"]) <= top3_names
 
 
 def test_gradio_app_builds():
