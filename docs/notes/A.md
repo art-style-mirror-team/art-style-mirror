@@ -1,7 +1,7 @@
 # A 데이터·CLIP — 작업 노트
 
 - 담당: 홍승민 · `modules/data.py`, `scripts/build_index.py`
-- 기준: main `2978f25`, 2026-11-27
+- 기준: main `332188e`, 2026-11-28
 - 이 노트는 다른 역할과 맞춘 결정과 A 작업에 영향을 주는 변경을 모은 것이다. 규칙은 `AGENTS.md`, 함수 형식은 `contracts/interfaces.md`, 일정은 `docs/plan.md`가 기준이며, 이 노트와 다르면 그쪽을 따른다.
 
 ## 지금 상태
