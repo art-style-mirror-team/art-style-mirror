@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
+from modules import data
 from modules.data import load_index
 
 CALIBRATION_PATH = Path(__file__).resolve().parent.parent / "artifacts" / "calibration.json"
@@ -20,6 +21,31 @@ CALIBRATION_PATH = Path(__file__).resolve().parent.parent / "artifacts" / "calib
 DEFAULT_CALIBRATION = {"T_clip": 1.0, "T_cv": 1.0, "w": 0.8, "method": "weighted_sum"}
 LOGIT_SCALE = 20.0  # 코사인 유사도 → 점수 배율 (스텁용)
 NEAR_DUPLICATE = 0.95  # similar_works()에서 이 값 이상은 같은 작품으로 보고 제외
+
+# detect_type()의 CLIP zero-shot 프롬프트. 유형별 영어 문장 앙상블(여러 변형)을
+# 임베딩해 평균한 프로토타입과 입력 임베딩의 코사인 유사도로 유형을 고른다.
+# CLIP이 영어 캡션으로 학습돼 프롬프트를 영어로 둔다.
+# 순서는 고정한다(argmax 동률 시 앞의 유형이 뽑혀 결정적으로 동작하게).
+# photo는 실제 장면으로 좁혀 종이 그림을 폰으로 찍은 입력이 끌려가지 않게 하고,
+# 직접 그린 색 그림은 painting에 포함한다.
+TYPE_PROMPTS: dict[str, list[str]] = {
+    "photo": [
+        "a photo of a real-world scene",
+        "a photograph of people, objects or places",
+        "a snapshot taken with a camera",
+    ],
+    "painting": [
+        "a painting",
+        "an oil painting",
+        "a watercolor painting",
+        "a colored drawing on paper",
+    ],
+    "sketch": [
+        "a pencil sketch",
+        "a black and white line drawing",
+        "a charcoal sketch on paper",
+    ],
+}
 
 
 def load_calibration() -> dict:
@@ -57,9 +83,31 @@ def _centroids() -> dict:
 
 
 def detect_type(img_emb: np.ndarray) -> str:
-    """입력 유형 판별. "photo" | "painting" | "sketch". (스텁: 임베딩 앞 3개 값 중 최댓값)"""
-    # TODO(#8): 스텁 — #8 CLIP zero-shot 유형 판별 (담당 B)
-    return ("photo", "painting", "sketch")[int(np.argmax(np.asarray(img_emb)[:3]))]
+    """입력 유형 판별. "photo" | "painting" | "sketch".
+
+    CLIP zero-shot: `TYPE_PROMPTS`의 유형별 영어 문장을 `data.embed_text`로 임베딩해
+    유형당 프로토타입(문장 임베딩 평균 후 L2 재정규화) 하나를 만들고, 입력 이미지
+    임베딩(L2 정규화)과 코사인 유사도가 가장 큰 유형을 돌려준다.
+
+    프롬프트 임베딩은 매 호출 계산한다(유형 10문장으로 작다). 그래서 테스트가
+    `data.embed_text`를 가짜로 바꿔 끼워도 그대로 반영된다. 모델 함수는 반드시
+    모듈 경유(`data.embed_text`)로 부른다.
+    """
+    types = list(TYPE_PROMPTS)  # dict는 삽입 순서 보존 → 결정적
+    prototypes = np.stack(
+        [
+            _l2_normalize(np.asarray(data.embed_text(TYPE_PROMPTS[t]), dtype=np.float32).mean(0))
+            for t in types
+        ]
+    )
+    # 입력은 list 등으로 와도 받는다. 방향만 보므로 L2 정규화해 크기에 불변이게 한다.
+    # NaN·inf가 섞인 입력은 계산 중 경고 대신 NaN 점수가 되게 한다(아래에서 처리).
+    with np.errstate(invalid="ignore"):
+        sims = prototypes @ _l2_normalize(img_emb)
+    # NaN(입력에 NaN·inf가 섞인 경우)은 가장 낮은 점수로 보고, 모두 NaN이어도 세 값 중 하나를
+    # 돌려준다(계약). argmax는 동률이면 앞의 유형을 고르므로 같은 입력에 같은 결과가 나온다.
+    sims = np.nan_to_num(sims, nan=-np.inf)
+    return types[int(np.argmax(sims))]
 
 
 def predict_clip(emb: np.ndarray) -> dict:

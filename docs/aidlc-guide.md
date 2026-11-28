@@ -204,6 +204,7 @@ modules/explain.py만 수정. 다른 모듈은 스텁을 그대로 쓴다.
 - PR 본문의 **AI 판단 이유 3줄**은 해당 intent의 `audit/` 기록에서 핵심만 골라 쓴다. 본인이 설명할 수 있어야 머지한다.
 - PR 본문에 intent 경로(`aidlc/spaces/default/intents/<id>/`)를 적는다.
 - intent 기록 폴더는 코드와 같은 PR로 커밋한다. 파일 수 제한(1~3개)은 **코드 파일 기준**으로 센다.
+- intent 목록 파일 `aidlc/spaces/default/intents/intents.json`도 같은 PR로 커밋하되, **자기 intent 항목만** 넣는다. 다른 사람 항목이 바뀌어 있으면(상태 값 등) `git add -p`로 빼고 커밋한다.
 - `pytest`가 통과해야 한다. AI-DLC의 Build and Test 단계에서 통과했어도 PR 전에 한 번 더 돌린다.
 
 ## 5. 쓰지 않는 기능
@@ -220,6 +221,8 @@ modules/explain.py만 수정. 다른 모듈은 스텁을 그대로 쓴다.
 - intent마다 기록 폴더가 따로 생기고 `audit/`도 PC별 파일로 나뉘어서, 네 명이 동시에 써도 충돌이 거의 없다.
 - 개인 커서 파일(`aidlc/active-space`, `intents/active-intent`, `aidlc/.aidlc-clone-id`, `aidlc/.aidlc-sessions/` 등)은 AI-DLC의 `.gitignore` 블록이 막는다. `git status`에 보이면 커밋하지 말고 D에게 알린다.
 - 남의 intent 폴더는 고치지 않는다. 남의 모듈 파일처럼 이슈로 요청한다.
+- `intents.json`은 모두가 같은 배열 끝에 항목을 추가하므로 PR끼리 충돌할 수 있다. 충돌하면 양쪽 항목을 모두 남기고, `python -m json.tool aidlc/spaces/default/intents/intents.json`으로 형식(쉼표·대괄호)을 확인한 뒤 커밋한다.
+- 이미 머지된 PR에서 자기 항목이 빠졌으면 `intents.json` 한 파일만 바꾸는 `chore: #<이슈> AI-DLC intent 항목 추가` PR로 따로 올린다. 항목의 `uuid`·`request` 값은 각자 PC의 파일에만 있어 다른 사람이 대신 채울 수 없다.
 - 팀 규칙 파일(`aidlc/spaces/default/memory/team.md`, `project.md`)을 바꿔야 하면 별도 PR로 한다.
 
 ## 7. 비용과 시간

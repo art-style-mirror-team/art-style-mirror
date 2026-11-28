@@ -1,7 +1,11 @@
-"""B — `similar_works()` 동작 테스트 (#13).
+"""B — `classify.py` 동작 테스트.
 
-`tests/test_smoke.py`는 형식만 검사하므로, 실제 색인 기준 코사인 검색 동작을 여기서 확인한다.
-모델 함수(`data.embed_image`)는 `tests/conftest.py`가 자동으로 `tests/fakes.py`의 가짜로 바꿔 끼운다.
+- #8 `detect_type()`: CLIP zero-shot 유형 판별
+- #13 `similar_works()`: 실제 색인 기준 코사인 검색
+
+`tests/test_smoke.py`는 형식만 검사하므로 동작은 여기서 확인한다. 모델 함수(`data.embed_image`,
+`data.embed_text`)는 `tests/conftest.py`가 `tests/fakes.py`의 가짜로 바꿔 끼우므로 실제 CLIP은
+내려받지 않는다(`@pytest.mark.model` 없음).
 """
 
 from __future__ import annotations
@@ -11,6 +15,69 @@ import pandas as pd
 import pytest
 
 from modules import classify, data
+
+# --- #8 detect_type() ------------------------------------------------------
+
+TYPES = {"photo", "painting", "sketch"}
+
+
+def _sample_emb() -> np.ndarray:
+    """가짜 `data.embed_image`로 만든 결정적 이미지 임베딩."""
+    img = np.random.default_rng(0).integers(0, 256, size=(64, 64, 3), dtype=np.uint8)
+    return data.embed_image(img)
+
+
+def test_detect_type_returns_valid_literal():
+    # happy path: 반환은 계약이 정한 세 리터럴 중 하나.
+    assert classify.detect_type(_sample_emb()) in TYPES
+
+
+def test_detect_type_deterministic():
+    # 같은 입력 → 같은 결과.
+    emb = _sample_emb()
+    assert classify.detect_type(emb) == classify.detect_type(emb)
+
+
+def test_detect_type_matches_prompt_class(monkeypatch):
+    # 각 유형을 한 축(one-hot)에 몰아주는 가짜로 바꿔, 그 축 벡터를 넣으면 해당 유형이
+    # 나오는지 확인한다. 핵심 정확성: 프로토타입·코사인 argmax가 제대로 작동하는가.
+    classes = list(classify.TYPE_PROMPTS)
+
+    def stub(texts):
+        if isinstance(texts, str):
+            texts = [texts]
+        rows = []
+        for text in texts:
+            vec = np.zeros(512, dtype=np.float32)
+            cls = next(c for c in classes if text in classify.TYPE_PROMPTS[c])
+            vec[classes.index(cls)] = 1.0
+            rows.append(vec)
+        return np.array(rows, dtype=np.float32)
+
+    monkeypatch.setattr(data, "embed_text", stub)
+
+    for i, cls in enumerate(classes):
+        basis = np.zeros(512, dtype=np.float32)
+        basis[i] = 1.0
+        assert classify.detect_type(basis) == cls
+
+
+def test_detect_type_scale_invariant():
+    # 방향이 같고 크기만 다른 입력은 같은 유형으로 분류된다(코사인 기반).
+    emb = _sample_emb()
+    assert classify.detect_type(emb) == classify.detect_type(emb * 3.0)
+
+
+def test_detect_type_nan_input_returns_valid_literal():
+    # NaN·inf가 섞인 입력이어도 None이 아니라 세 리터럴 중 하나를 돌려준다(계약).
+    emb = np.full(512, np.nan, dtype=np.float32)
+    assert classify.detect_type(emb) in TYPES
+    emb = _sample_emb().copy()
+    emb[0] = np.inf
+    assert classify.detect_type(emb) in TYPES
+
+
+# --- #13 similar_works() ---------------------------------------------------
 
 
 def _img() -> np.ndarray:
