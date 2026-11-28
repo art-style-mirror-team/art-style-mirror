@@ -14,5 +14,13 @@
     "scope": "express",
     "status": "complete",
     "request": "8ed424a9"
+  },
+  {
+    "uuid": "01a211da-ffa9-7d01-bf79-90d4fdfa3c59",
+    "slug": "detect-type-clip",
+    "dirName": "261125-detect-type-clip",
+    "scope": "express",
+    "status": "complete",
+    "request": "663f34a1"
   }
 ]
