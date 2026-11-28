@@ -72,11 +72,6 @@ def test_team_constants_and_fake_fallback(tmp_path):
     assert set(idx["meta"]["artist"]) == set(D.ARTISTS)
 
 
-def test_clip_keywords_stub_shape():
-    out = D.clip_keywords(np.ones(512, np.float32), k=3)
-    assert len(out) == 3 and out == sorted(out, key=lambda t: -t[1])
-
-
 def test_cap_per_artist_keeps_columns_and_caps():
     df = pd.DataFrame({"artist": ["a"] * 10 + ["b"] * 3, "style": "s", "genre": "g"})
     r = D.cap_per_artist(df, 5)
@@ -166,3 +161,61 @@ def test_load_index_cache(tmp_path):
     assert D.load_index(tmp_path)["meta"].loc[0, "artist"] == "Vincent van Gogh"
     write(5)  # 파일이 바뀌면 다시 읽는다
     assert len(D.load_index(tmp_path)["emb"]) == 5
+
+
+def test_artist_info_covers_index():
+    """실제 인덱스의 모든 화가에게 소개가 있고, 빈 칸이 없다."""
+    idx = D.load_index()
+    if idx["meta"].attrs["fake"]:
+        pytest.skip("실제 인덱스가 없는 환경")
+    info = D.load_artist_info()
+    assert set(idx["meta"]["artist"]) <= set(info)
+    for name, row in info.items():
+        assert all(row[k].strip() for k in ("years", "nationality", "intro")), name
+        assert len(row["intro"]) <= 120, name  # 화면에 한두 줄로 보이는 길이
+
+
+def test_artist_info_missing_file(tmp_path):
+    assert D.load_artist_info(tmp_path / "none.csv") == {}
+
+
+def _fake_text_embed(monkeypatch):
+    """문장마다 고정된 무작위 단위벡터를 돌려주는 가짜 embed_text (모델 없이 로직만 검사)."""
+
+    def fake(texts):
+        out = []
+        for t in texts:
+            rng = np.random.default_rng(D._seed(t.encode()))
+            v = rng.normal(size=D.EMB_DIM).astype(np.float32)
+            out.append(v / np.linalg.norm(v))
+        return np.stack(out)
+
+    monkeypatch.setattr(D, "embed_text", fake)
+
+
+def test_clip_keywords_format(monkeypatch):
+    _fake_text_embed(monkeypatch)
+    out = D.clip_keywords(np.ones(D.EMB_DIM, np.float32), k=3)
+    assert len(out) == 3
+    assert out == sorted(out, key=lambda t: -t[1])  # 점수 내림차순
+    assert all(label in D.KEYWORDS and 0.5 <= score <= 1.0 for label, score in out)
+    labels = [label for label, _ in out]
+    pairs = {frozenset(p[:2]) for p in D.KEYWORD_PAIRS}
+    assert len(set(labels)) == 3 and not any(
+        set(pr) <= set(labels) for pr in pairs
+    )  # 한 쌍에서 한쪽만
+
+
+def test_clip_keywords_picks_aligned_side(monkeypatch):
+    _fake_text_embed(monkeypatch)
+    axes = D._keyword_axes()
+    for i in (0, 3, 7):  # 쌍 방향으로 치우친 임베딩은 그 쌍의 해당 쪽 표시어를 1순위로 고른다
+        pos, neg = D.KEYWORD_PAIRS[i][:2]
+        assert D.clip_keywords(axes[i] * 5.0, k=1)[0][0] == pos
+        assert D.clip_keywords(-axes[i] * 5.0, k=1)[0][0] == neg
+
+
+def test_clip_keywords_rejects_bad_shape(monkeypatch):
+    _fake_text_embed(monkeypatch)
+    with pytest.raises(ValueError):
+        D.clip_keywords(np.ones(10, np.float32))
